@@ -348,9 +348,18 @@ export default function JobDetailPage() {
                 >
                   <div className="flex justify-between items-start gap-6">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold">
-                        {candidate.full_name}
-                      </h3>
+                      <button
+                        onClick={() =>
+                          router.push(
+                            `/jobs/${jobId}/candidates/${candidate.id}`
+                          )
+                        }
+                        className="text-left"
+                      >
+                        <h3 className="text-lg font-semibold text-blue-600 hover:underline">
+                          {candidate.full_name}
+                        </h3>
+                      </button>
 
                       <p className="text-sm text-gray-600 mt-1">
                         {candidate.email}
