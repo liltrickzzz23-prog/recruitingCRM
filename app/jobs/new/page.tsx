@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -12,6 +12,26 @@ export default function NewJobPage() {
   const [location, setLocation] = useState("");
   const [employmentType, setEmploymentType] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      setAuthorized(true);
+      setCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [router]);
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +44,7 @@ export default function NewJobPage() {
     if (!session) {
       alert("You must be logged in to create a job.");
       setLoading(false);
+      router.replace("/login");
       return;
     }
 
@@ -46,6 +67,20 @@ export default function NewJobPage() {
     alert("Job created successfully.");
     router.push("/dashboard");
   };
+
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-gray-100">
+        <div className="max-w-2xl mx-auto px-6 py-12">
+          <p className="text-gray-600">Checking access...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!authorized) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-gray-100">
