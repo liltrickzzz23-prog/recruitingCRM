@@ -23,6 +23,8 @@ export default function ApplyPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -53,6 +55,30 @@ export default function ApplyPage() {
     e.preventDefault();
     setSubmitting(true);
 
+    let resumeUrl: string | null = null;
+
+    if (resumeFile) {
+      const fileExt = resumeFile.name.split(".").pop();
+      const safeName = fullName.trim().replace(/\s+/g, "-").toLowerCase();
+      const fileName = `${jobId}-${Date.now()}-${safeName}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("resumes")
+        .upload(fileName, resumeFile);
+
+      if (uploadError) {
+        alert(uploadError.message);
+        setSubmitting(false);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("resumes")
+        .getPublicUrl(fileName);
+
+      resumeUrl = publicUrlData.publicUrl;
+    }
+
     const { error } = await supabase.from("candidates").insert([
       {
         job_id: jobId,
@@ -60,6 +86,7 @@ export default function ApplyPage() {
         email,
         phone,
         linkedin_url: linkedinUrl,
+        resume_url: resumeUrl,
         stage: "Applied",
       },
     ]);
@@ -176,6 +203,19 @@ export default function ApplyPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2"
                 placeholder="https://linkedin.com/in/yourname"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Resume Upload</label>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Accepted formats: PDF, DOC, DOCX
+              </p>
             </div>
 
             <button
