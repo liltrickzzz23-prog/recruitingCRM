@@ -64,14 +64,20 @@ export default function CandidateDetailPage() {
     return `${month}/${day}/${year} at ${hour}:${minute} ${suffix}`;
   };
 
-  const getEmailLink = () => {
+  const createMailtoLink = (subjectText: string, bodyText: string) => {
     if (!candidate) return "#";
 
-    const subject = encodeURIComponent(
-      `Follow up regarding your application`
-    );
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(bodyText);
 
-    const body = encodeURIComponent(
+    return `mailto:${candidate.email}?subject=${subject}&body=${body}`;
+  };
+
+  const getGeneralEmailLink = () => {
+    if (!candidate) return "#";
+
+    return createMailtoLink(
+      "Follow up regarding your application",
       `Hi ${candidate.full_name},
 
 Thank you for your application. I wanted to follow up with you regarding the role.
@@ -79,8 +85,62 @@ Thank you for your application. I wanted to follow up with you regarding the rol
 Best,
 Hiring Team`
     );
+  };
 
-    return `mailto:${candidate.email}?subject=${subject}&body=${body}`;
+  const getInterviewInviteLink = () => {
+    if (!candidate) return "#";
+
+    const interviewText = candidate.interview_date
+      ? `We would like to invite you to interview on ${formatInterviewDate(
+          candidate.interview_date
+        )}.`
+      : "We would like to invite you to an interview.";
+
+    return createMailtoLink(
+      "Interview Invitation",
+      `Hi ${candidate.full_name},
+
+Thank you for your application.
+
+${interviewText}
+
+Please reply to confirm your availability.
+
+Best,
+Hiring Team`
+    );
+  };
+
+  const getRejectionEmailLink = () => {
+    if (!candidate) return "#";
+
+    return createMailtoLink(
+      "Update on your application",
+      `Hi ${candidate.full_name},
+
+Thank you for taking the time to apply for this role.
+
+At this time, we have decided to move forward with other candidates. We appreciate your interest and wish you the best in your job search.
+
+Best,
+Hiring Team`
+    );
+  };
+
+  const getFollowUpEmailLink = () => {
+    if (!candidate) return "#";
+
+    return createMailtoLink(
+      "Application Follow-Up",
+      `Hi ${candidate.full_name},
+
+I wanted to follow up regarding your application and see if you have any questions for us.
+
+Looking forward to hearing from you.
+
+Best,
+Hiring Team`
+    );
   };
 
   useEffect(() => {
@@ -206,7 +266,7 @@ Hiring Team`
         </button>
 
         <div className="bg-white rounded-xl shadow p-8">
-          <div className="flex justify-between items-start gap-4">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
 
@@ -255,12 +315,35 @@ Hiring Team`
               </div>
             </div>
 
-            <a
-              href={getEmailLink()}
-              className="bg-black text-white px-4 py-2 rounded-lg"
-            >
-              Email Candidate
-            </a>
+            <div className="flex flex-col gap-3 w-full md:w-auto">
+              <a
+                href={getGeneralEmailLink()}
+                className="bg-black text-white px-4 py-2 rounded-lg text-center"
+              >
+                Email Candidate
+              </a>
+
+              <a
+                href={getInterviewInviteLink()}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-center"
+              >
+                Send Interview Invite
+              </a>
+
+              <a
+                href={getRejectionEmailLink()}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-center"
+              >
+                Send Rejection
+              </a>
+
+              <a
+                href={getFollowUpEmailLink()}
+                className="bg-gray-700 text-white px-4 py-2 rounded-lg text-center"
+              >
+                Send Follow-up
+              </a>
+            </div>
           </div>
 
           <div className="mt-8">
