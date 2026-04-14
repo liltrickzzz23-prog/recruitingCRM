@@ -128,7 +128,6 @@ export default function JobDetailPage() {
       }
 
       const loadedCandidates = candidateData || [];
-      console.log("CANDIDATES LOADED:", loadedCandidates);
       setCandidates(loadedCandidates);
 
       const initialNotes: Record<string, string> = {};
@@ -253,7 +252,9 @@ export default function JobDetailPage() {
     );
   }
 
-  if (!authorized) return null;
+  if (!authorized) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -351,10 +352,6 @@ export default function JobDetailPage() {
                         {candidate.full_name}
                       </h3>
 
-                      <p className="text-xs text-gray-400 mt-1">
-                        Candidate ID: {candidate.id}
-                      </p>
-
                       <p className="text-sm text-gray-600 mt-1">
                         {candidate.email}
                       </p>
@@ -374,10 +371,6 @@ export default function JobDetailPage() {
                       ) : (
                         <p className="text-sm text-gray-500">No LinkedIn URL</p>
                       )}
-
-                      <p className="text-xs text-gray-500 mt-2 break-all">
-                        Raw resume_url: {candidate.resume_url || "NULL"}
-                      </p>
 
                       {candidate.resume_url ? (
                         <a
