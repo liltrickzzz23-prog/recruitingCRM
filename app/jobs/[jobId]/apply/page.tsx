@@ -252,9 +252,7 @@ export default function JobDetailPage() {
     );
   }
 
-  if (!authorized) {
-    return null;
-  }
+  if (!authorized) return null;
 
   if (loading) {
     return (
@@ -272,7 +270,6 @@ export default function JobDetailPage() {
         <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold">Job Not Found</h1>
           <p className="text-gray-600 mt-2">We could not find that job.</p>
-
           <button
             onClick={() => router.push("/dashboard")}
             className="mt-6 bg-black text-white px-4 py-2 rounded-lg"
