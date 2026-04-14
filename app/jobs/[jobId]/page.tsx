@@ -64,6 +64,7 @@ export default function JobDetailPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -284,10 +285,28 @@ export default function JobDetailPage() {
     });
   }, [candidates, searchTerm, stageFilter]);
 
+  const candidatesByStage = useMemo(() => {
+    const grouped: Record<string, Candidate[]> = {};
+
+    STAGE_OPTIONS.forEach((stage) => {
+      grouped[stage] = [];
+    });
+
+    filteredCandidates.forEach((candidate) => {
+      const currentStage = candidate.stage || "Applied";
+      if (!grouped[currentStage]) {
+        grouped[currentStage] = [];
+      }
+      grouped[currentStage].push(candidate);
+    });
+
+    return grouped;
+  }, [filteredCandidates]);
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <p className="text-gray-600">Checking access...</p>
         </div>
       </main>
@@ -301,7 +320,7 @@ export default function JobDetailPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <p className="text-gray-600">Loading job...</p>
         </div>
       </main>
@@ -311,7 +330,7 @@ export default function JobDetailPage() {
   if (!job) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold">Job Not Found</h1>
           <p className="text-gray-600 mt-2">We could not find that job.</p>
           <button
@@ -329,7 +348,7 @@ export default function JobDetailPage() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-6 py-12">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <button
           onClick={() => router.push("/dashboard")}
           className="mb-6 text-sm text-blue-600 hover:underline"
@@ -393,15 +412,41 @@ export default function JobDetailPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow p-8 mt-8">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-2xl font-bold">Candidates</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Search by name or email, and filter by stage.
-              </p>
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold">Candidates</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Search, filter, and view candidates as a list or pipeline board.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`px-4 py-2 rounded-lg ${
+                    viewMode === "list"
+                      ? "bg-black text-white"
+                      : "bg-gray-200 text-black"
+                  }`}
+                >
+                  List View
+                </button>
+
+                <button
+                  onClick={() => setViewMode("kanban")}
+                  className={`px-4 py-2 rounded-lg ${
+                    viewMode === "kanban"
+                      ? "bg-black text-white"
+                      : "bg-gray-200 text-black"
+                  }`}
+                >
+                  Kanban View
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-3 md:w-auto w-full">
+            <div className="flex flex-col md:flex-row gap-3">
               <input
                 type="text"
                 value={searchTerm}
@@ -431,7 +476,7 @@ export default function JobDetailPage() {
             <p className="text-gray-500">
               No candidates match your current search/filter.
             </p>
-          ) : (
+          ) : viewMode === "list" ? (
             <div className="space-y-4">
               {filteredCandidates.map((candidate) => (
                 <div
@@ -576,6 +621,64 @@ export default function JobDetailPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 min-w-[1200px]">
+                {STAGE_OPTIONS.map((stage) => (
+                  <div
+                    key={stage}
+                    className="bg-gray-50 border border-gray-200 rounded-xl p-4"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-lg">{stage}</h3>
+                      <span className="text-sm bg-white border border-gray-200 rounded-full px-2 py-1">
+                        {candidatesByStage[stage]?.length || 0}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {(candidatesByStage[stage] || []).length === 0 ? (
+                        <p className="text-sm text-gray-400">
+                          No candidates
+                        </p>
+                      ) : (
+                        candidatesByStage[stage].map((candidate) => (
+                          <button
+                            key={candidate.id}
+                            onClick={() =>
+                              router.push(
+                                `/jobs/${jobId}/candidates/${candidate.id}`
+                              )
+                            }
+                            className="w-full text-left bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition"
+                          >
+                            <h4 className="font-semibold text-sm">
+                              {candidate.full_name}
+                            </h4>
+                            <p className="text-xs text-gray-600 mt-1 break-words">
+                              {candidate.email}
+                            </p>
+
+                            {candidate.interview_date && (
+                              <p className="text-xs text-blue-600 mt-2">
+                                Interview:{" "}
+                                {formatInterviewDate(candidate.interview_date)}
+                              </p>
+                            )}
+
+                            {candidate.resume_url && (
+                              <p className="text-xs text-green-600 mt-2">
+                                Resume uploaded
+                              </p>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
