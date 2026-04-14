@@ -60,6 +60,7 @@ export default function JobDetailPage() {
   const [savingInterviewId, setSavingInterviewId] = useState<string | null>(
     null
   );
+  const [deletingJob, setDeletingJob] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
@@ -245,6 +246,27 @@ export default function JobDetailPage() {
     setSavingInterviewId(null);
   };
 
+  const handleDeleteJob = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this job? This will also remove its candidates."
+    );
+
+    if (!confirmed) return;
+
+    setDeletingJob(true);
+
+    const { error } = await supabase.from("jobs").delete().eq("id", jobId);
+
+    if (error) {
+      alert(error.message);
+      setDeletingJob(false);
+      return;
+    }
+
+    alert("Job deleted.");
+    router.push("/dashboard");
+  };
+
   const filteredCandidates = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -331,12 +353,22 @@ export default function JobDetailPage() {
               </p>
             </div>
 
-            <button
-              onClick={() => navigator.clipboard.writeText(applyLink)}
-              className="bg-black text-white px-4 py-2 rounded-lg"
-            >
-              Copy Apply Link
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push(`/jobs/${jobId}/edit`)}
+                className="bg-black text-white px-4 py-2 rounded-lg"
+              >
+                Edit Job
+              </button>
+
+              <button
+                onClick={handleDeleteJob}
+                disabled={deletingJob}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+              >
+                {deletingJob ? "Deleting..." : "Delete Job"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-8">
@@ -348,7 +380,15 @@ export default function JobDetailPage() {
 
           <div className="mt-10 border-t pt-6">
             <h2 className="text-xl font-bold mb-3">Public Apply Link</h2>
-            <p className="text-sm text-gray-600 break-all">{applyLink}</p>
+            <div className="flex flex-col md:flex-row gap-3 md:items-center">
+              <p className="text-sm text-gray-600 break-all flex-1">{applyLink}</p>
+              <button
+                onClick={() => navigator.clipboard.writeText(applyLink)}
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg"
+              >
+                Copy Apply Link
+              </button>
+            </div>
           </div>
         </div>
 
