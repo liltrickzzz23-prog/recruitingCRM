@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -60,6 +60,9 @@ export default function JobDetailPage() {
   const [savingInterviewId, setSavingInterviewId] = useState<string | null>(
     null
   );
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [stageFilter, setStageFilter] = useState("All");
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -242,6 +245,23 @@ export default function JobDetailPage() {
     setSavingInterviewId(null);
   };
 
+  const filteredCandidates = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return candidates.filter((candidate) => {
+      const matchesSearch =
+        normalizedSearch === "" ||
+        candidate.full_name.toLowerCase().includes(normalizedSearch) ||
+        candidate.email.toLowerCase().includes(normalizedSearch);
+
+      const currentStage = candidate.stage || "Applied";
+      const matchesStage =
+        stageFilter === "All" || currentStage === stageFilter;
+
+      return matchesSearch && matchesStage;
+    });
+  }, [candidates, searchTerm, stageFilter]);
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
@@ -333,15 +353,47 @@ export default function JobDetailPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow p-8 mt-8">
-          <h2 className="text-2xl font-bold mb-6">Candidates</h2>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Candidates</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Search by name or email, and filter by stage.
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-3 md:w-auto w-full">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search candidates..."
+                className="rounded-lg border border-gray-300 px-3 py-2 w-full md:w-64"
+              />
+
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 w-full md:w-48"
+              >
+                <option value="All">All Stages</option>
+                {STAGE_OPTIONS.map((stageOption) => (
+                  <option key={stageOption} value={stageOption}>
+                    {stageOption}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {loadingCandidates ? (
             <p className="text-gray-500">Loading candidates...</p>
-          ) : candidates.length === 0 ? (
-            <p className="text-gray-500">No candidates have applied yet.</p>
+          ) : filteredCandidates.length === 0 ? (
+            <p className="text-gray-500">
+              No candidates match your current search/filter.
+            </p>
           ) : (
             <div className="space-y-4">
-              {candidates.map((candidate) => (
+              {filteredCandidates.map((candidate) => (
                 <div
                   key={candidate.id}
                   className="border border-gray-200 rounded-lg p-4"
