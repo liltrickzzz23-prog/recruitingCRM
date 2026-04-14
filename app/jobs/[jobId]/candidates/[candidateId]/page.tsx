@@ -64,6 +64,25 @@ export default function CandidateDetailPage() {
     return `${month}/${day}/${year} at ${hour}:${minute} ${suffix}`;
   };
 
+  const getEmailLink = () => {
+    if (!candidate) return "#";
+
+    const subject = encodeURIComponent(
+      `Follow up regarding your application`
+    );
+
+    const body = encodeURIComponent(
+      `Hi ${candidate.full_name},
+
+Thank you for your application. I wanted to follow up with you regarding the role.
+
+Best,
+Hiring Team`
+    );
+
+    return `mailto:${candidate.email}?subject=${subject}&body=${body}`;
+  };
+
   useEffect(() => {
     const loadCandidate = async () => {
       const {
@@ -187,50 +206,61 @@ export default function CandidateDetailPage() {
         </button>
 
         <div className="bg-white rounded-xl shadow p-8">
-          <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
+          <div className="flex justify-between items-start gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
 
-          <div className="mt-6 space-y-2">
-            <p className="text-gray-700">
-              <span className="font-semibold">Email:</span> {candidate.email}
-            </p>
-            <p className="text-gray-700">
-              <span className="font-semibold">Phone:</span>{" "}
-              {candidate.phone || "No phone provided"}
-            </p>
+              <div className="mt-6 space-y-2">
+                <p className="text-gray-700">
+                  <span className="font-semibold">Email:</span> {candidate.email}
+                </p>
+                <p className="text-gray-700">
+                  <span className="font-semibold">Phone:</span>{" "}
+                  {candidate.phone || "No phone provided"}
+                </p>
 
-            {candidate.linkedin_url ? (
-              <p>
-                <a
-                  href={candidate.linkedin_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  View LinkedIn
-                </a>
-              </p>
-            ) : (
-              <p className="text-gray-500">No LinkedIn URL</p>
-            )}
+                {candidate.linkedin_url ? (
+                  <p>
+                    <a
+                      href={candidate.linkedin_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      View LinkedIn
+                    </a>
+                  </p>
+                ) : (
+                  <p className="text-gray-500">No LinkedIn URL</p>
+                )}
 
-            {candidate.resume_url ? (
-              <p>
-                <a
-                  href={candidate.resume_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-green-600 hover:underline"
-                >
-                  View Resume
-                </a>
-              </p>
-            ) : (
-              <p className="text-gray-500">No resume uploaded</p>
-            )}
+                {candidate.resume_url ? (
+                  <p>
+                    <a
+                      href={candidate.resume_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-green-600 hover:underline"
+                    >
+                      View Resume
+                    </a>
+                  </p>
+                ) : (
+                  <p className="text-gray-500">No resume uploaded</p>
+                )}
 
-            <p className="text-sm text-gray-400">
-              Applied: {new Date(candidate.created_at).toLocaleDateString()}
-            </p>
+                <p className="text-sm text-gray-400">
+                  Applied: {new Date(candidate.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={getEmailLink()}
+              className="bg-black text-white px-4 py-2 rounded-lg"
+            >
+              Email Candidate
+            </a>
           </div>
 
           <div className="mt-8">
