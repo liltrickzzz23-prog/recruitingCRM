@@ -20,6 +20,7 @@ type Candidate = {
   email: string;
   phone: string | null;
   linkedin_url: string | null;
+  resume_url: string | null;
   stage: string | null;
   notes: string | null;
   interview_date: string | null;
@@ -115,7 +116,7 @@ export default function JobDetailPage() {
       const { data: candidateData, error: candidateError } = await supabase
         .from("candidates")
         .select(
-          "id, full_name, email, phone, linkedin_url, stage, notes, interview_date, created_at"
+          "id, full_name, email, phone, linkedin_url, resume_url, stage, notes, interview_date, created_at"
         )
         .eq("job_id", jobId)
         .order("created_at", { ascending: false });
@@ -127,6 +128,7 @@ export default function JobDetailPage() {
       }
 
       const loadedCandidates = candidateData || [];
+      console.log("CANDIDATES LOADED:", loadedCandidates);
       setCandidates(loadedCandidates);
 
       const initialNotes: Record<string, string> = {};
@@ -251,9 +253,7 @@ export default function JobDetailPage() {
     );
   }
 
-  if (!authorized) {
-    return null;
-  }
+  if (!authorized) return null;
 
   if (loading) {
     return (
@@ -271,7 +271,6 @@ export default function JobDetailPage() {
         <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold">Job Not Found</h1>
           <p className="text-gray-600 mt-2">We could not find that job.</p>
-
           <button
             onClick={() => router.push("/dashboard")}
             className="mt-6 bg-black text-white px-4 py-2 rounded-lg"
@@ -351,6 +350,11 @@ export default function JobDetailPage() {
                       <h3 className="text-lg font-semibold">
                         {candidate.full_name}
                       </h3>
+
+                      <p className="text-xs text-gray-400 mt-1">
+                        Candidate ID: {candidate.id}
+                      </p>
+
                       <p className="text-sm text-gray-600 mt-1">
                         {candidate.email}
                       </p>
@@ -363,13 +367,30 @@ export default function JobDetailPage() {
                           href={candidate.linkedin_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
+                          className="text-sm text-blue-600 hover:underline block"
                         >
                           View LinkedIn
                         </a>
                       ) : (
-                        <p className="text-sm text-gray-500">
-                          No LinkedIn URL
+                        <p className="text-sm text-gray-500">No LinkedIn URL</p>
+                      )}
+
+                      <p className="text-xs text-gray-500 mt-2 break-all">
+                        Raw resume_url: {candidate.resume_url || "NULL"}
+                      </p>
+
+                      {candidate.resume_url ? (
+                        <a
+                          href={candidate.resume_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-green-600 hover:underline block mt-1"
+                        >
+                          View Resume
+                        </a>
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-1">
+                          No resume uploaded
                         </p>
                       )}
 
