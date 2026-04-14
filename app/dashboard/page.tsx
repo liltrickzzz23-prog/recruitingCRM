@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -9,6 +9,7 @@ type Job = {
   title: string;
   location: string | null;
   employment_type: string | null;
+  status: string | null;
   created_at: string;
 };
 
@@ -21,6 +22,15 @@ type Candidate = {
   created_at: string;
   job_id: string;
 };
+
+const STAGE_OPTIONS = [
+  "Applied",
+  "Reviewed",
+  "Interview",
+  "Offer",
+  "Hired",
+  "Rejected",
+];
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -65,7 +75,7 @@ export default function DashboardPage() {
 
       const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
-        .select("id, title, location, employment_type, created_at")
+        .select("id, title, location, employment_type, status, created_at")
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
 
@@ -110,6 +120,47 @@ export default function DashboardPage() {
     router.replace("/login");
   };
 
+  const analytics = useMemo(() => {
+    const totalJobs = jobs.length;
+    const openJobs = jobs.filter((job) => (job.status || "open") === "open").length;
+    const closedJobs = jobs.filter((job) => job.status === "closed").length;
+
+    const totalCandidates = candidates.length;
+    const interviewsScheduled = candidates.filter(
+      (candidate) => candidate.interview_date
+    ).length;
+    const hiredCount = candidates.filter(
+      (candidate) => (candidate.stage || "Applied") === "Hired"
+    ).length;
+
+    const stageCounts: Record<string, number> = {};
+    STAGE_OPTIONS.forEach((stage) => {
+      stageCounts[stage] = candidates.filter(
+        (candidate) => (candidate.stage || "Applied") === stage
+      ).length;
+    });
+
+    return {
+      totalJobs,
+      openJobs,
+      closedJobs,
+      totalCandidates,
+      interviewsScheduled,
+      hiredCount,
+      stageCounts,
+    };
+  }, [jobs, candidates]);
+
+  const upcomingInterviews = useMemo(() => {
+    return candidates
+      .filter((candidate) => candidate.interview_date)
+      .sort((a, b) => {
+        const dateA = a.interview_date || "";
+        const dateB = b.interview_date || "";
+        return dateA.localeCompare(dateB);
+      });
+  }, [candidates]);
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
@@ -120,14 +171,10 @@ export default function DashboardPage() {
     );
   }
 
-  const upcomingInterviews = candidates.filter(
-    (candidate) => candidate.interview_date
-  );
-
   return (
     <main className="min-h-screen bg-gray-100 px-6 py-12">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-start mb-8">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
           <div>
             <h1 className="text-5xl font-bold">Dashboard</h1>
             <p className="text-gray-600 mt-3">
@@ -153,23 +200,60 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Total Jobs</p>
+            <h2 className="text-5xl font-bold mt-2">{analytics.totalJobs}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Open Jobs</p>
+            <h2 className="text-5xl font-bold mt-2">{analytics.openJobs}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Closed Jobs</p>
+            <h2 className="text-5xl font-bold mt-2">{analytics.closedJobs}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Total Candidates</p>
+            <h2 className="text-5xl font-bold mt-2">
+              {analytics.totalCandidates}
+            </h2>
+          </div>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Active Jobs</p>
-            <h2 className="text-5xl font-bold mt-2">{jobs.length}</h2>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Candidates</p>
-            <h2 className="text-5xl font-bold mt-2">{candidates.length}</h2>
-          </div>
-
           <div className="bg-white p-6 rounded-xl shadow">
             <p className="text-gray-500">Interviews Scheduled</p>
             <h2 className="text-5xl font-bold mt-2">
-              {upcomingInterviews.length}
+              {analytics.interviewsScheduled}
             </h2>
           </div>
+
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Hired</p>
+            <h2 className="text-5xl font-bold mt-2">{analytics.hiredCount}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow">
+            <p className="text-gray-500">Applied</p>
+            <h2 className="text-5xl font-bold mt-2">
+              {analytics.stageCounts["Applied"]}
+            </h2>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          {STAGE_OPTIONS.map((stage) => (
+            <div key={stage} className="bg-white p-6 rounded-xl shadow">
+              <p className="text-gray-500">{stage}</p>
+              <h2 className="text-4xl font-bold mt-2">
+                {analytics.stageCounts[stage]}
+              </h2>
+            </div>
+          ))}
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -190,6 +274,9 @@ export default function DashboardPage() {
                     {job.location || "No location"} •{" "}
                     {job.employment_type || "No employment type"}
                   </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Status: {job.status || "open"}
+                  </p>
                 </div>
               ))
             )}
@@ -201,10 +288,13 @@ export default function DashboardPage() {
             {upcomingInterviews.length === 0 ? (
               <p>No interviews scheduled.</p>
             ) : (
-              upcomingInterviews.map((candidate) => (
+              upcomingInterviews.slice(0, 8).map((candidate) => (
                 <div key={candidate.id} className="border rounded-lg p-4 mb-4">
                   <h3 className="font-bold text-xl">{candidate.full_name}</h3>
                   <p className="text-gray-600">{candidate.email}</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Stage: {candidate.stage || "Applied"}
+                  </p>
                   <p className="text-blue-600 mt-2">
                     {formatInterviewDate(candidate.interview_date!)}
                   </p>
