@@ -19,6 +19,7 @@ type Candidate = {
   stage: string | null;
   interview_date: string | null;
   created_at: string;
+  job_id: string;
 };
 
 export default function DashboardPage() {
@@ -31,11 +32,12 @@ export default function DashboardPage() {
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
+    if (!datePart || !timePart) return dateString;
 
     const [year, month, day] = datePart.split("-");
     const [hourRaw, minute] = timePart.split(":");
 
-    let hour = parseInt(hourRaw);
+    let hour = parseInt(hourRaw, 10);
     let suffix = "AM";
 
     if (hour >= 12) {
@@ -61,19 +63,42 @@ export default function DashboardPage() {
 
       setUserEmail(session.user.email || "");
 
-      const { data: jobsData } = await supabase
+      const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
-        .select("*")
+        .select("id, title, location, employment_type, created_at")
+        .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
 
-      const { data: candidatesData } = await supabase
+      if (jobsError) {
+        console.error("Error loading jobs:", jobsError.message);
+        setLoading(false);
+        return;
+      }
+
+      const userJobs = jobsData || [];
+      setJobs(userJobs);
+
+      if (userJobs.length === 0) {
+        setCandidates([]);
+        setLoading(false);
+        return;
+      }
+
+      const jobIds = userJobs.map((job) => job.id);
+
+      const { data: candidatesData, error: candidatesError } = await supabase
         .from("candidates")
-        .select("*")
+        .select("id, full_name, email, stage, interview_date, created_at, job_id")
+        .in("job_id", jobIds)
         .order("created_at", { ascending: false });
 
-      setJobs(jobsData || []);
-      setCandidates(candidatesData || []);
+      if (candidatesError) {
+        console.error("Error loading candidates:", candidatesError.message);
+        setLoading(false);
+        return;
+      }
 
+      setCandidates(candidatesData || []);
       setLoading(false);
     };
 
@@ -85,7 +110,15 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-100 px-6 py-12">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </main>
+    );
+  }
 
   const upcomingInterviews = candidates.filter(
     (candidate) => candidate.interview_date
@@ -100,9 +133,7 @@ export default function DashboardPage() {
             <p className="text-gray-600 mt-3">
               Welcome to your Recruiting CRM
             </p>
-            <p className="text-blue-600 mt-2">
-              Logged in as: {userEmail}
-            </p>
+            <p className="text-blue-600 mt-2">Logged in as: {userEmail}</p>
           </div>
 
           <div className="flex gap-3">
@@ -130,9 +161,7 @@ export default function DashboardPage() {
 
           <div className="bg-white p-6 rounded-xl shadow">
             <p className="text-gray-500">Candidates</p>
-            <h2 className="text-5xl font-bold mt-2">
-              {candidates.length}
-            </h2>
+            <h2 className="text-5xl font-bold mt-2">{candidates.length}</h2>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow">
@@ -158,7 +187,8 @@ export default function DashboardPage() {
                 >
                   <h3 className="font-bold text-xl">{job.title}</h3>
                   <p className="text-gray-600">
-                    {job.location} • {job.employment_type}
+                    {job.location || "No location"} •{" "}
+                    {job.employment_type || "No employment type"}
                   </p>
                 </div>
               ))
@@ -166,28 +196,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white p-8 rounded-xl shadow">
-            <h2 className="text-3xl font-bold mb-6">
-              Upcoming Interviews
-            </h2>
+            <h2 className="text-3xl font-bold mb-6">Upcoming Interviews</h2>
 
             {upcomingInterviews.length === 0 ? (
               <p>No interviews scheduled.</p>
             ) : (
               upcomingInterviews.map((candidate) => (
-                <div
-                  key={candidate.id}
-                  className="border rounded-lg p-4 mb-4"
-                >
-                  <h3 className="font-bold text-xl">
-                    {candidate.full_name}
-                  </h3>
-
+                <div key={candidate.id} className="border rounded-lg p-4 mb-4">
+                  <h3 className="font-bold text-xl">{candidate.full_name}</h3>
                   <p className="text-gray-600">{candidate.email}</p>
-
                   <p className="text-blue-600 mt-2">
-                    {formatInterviewDate(
-                      candidate.interview_date!
-                    )}
+                    {formatInterviewDate(candidate.interview_date!)}
                   </p>
                 </div>
               ))
