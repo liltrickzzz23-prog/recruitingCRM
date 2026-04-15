@@ -39,6 +39,8 @@ export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -118,6 +120,66 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace("/login");
+  };
+
+  const handleSubscribe = async () => {
+    try {
+      setStartingCheckout(true);
+
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: userEmail,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Unable to start checkout.");
+        setStartingCheckout(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error(error);
+      alert("Unable to start checkout.");
+      setStartingCheckout(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    try {
+      setOpeningPortal(true);
+
+      const response = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: userEmail,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Unable to open billing portal.");
+        setOpeningPortal(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error(error);
+      alert("Unable to open billing portal.");
+      setOpeningPortal(false);
+    }
   };
 
   const analytics = useMemo(() => {
@@ -203,6 +265,22 @@ export default function DashboardPage() {
               className="bg-gray-800 text-white px-6 py-3 rounded-lg"
             >
               Settings
+            </button>
+
+            <button
+              onClick={handleSubscribe}
+              disabled={startingCheckout}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+            >
+              {startingCheckout ? "Starting..." : "Subscribe"}
+            </button>
+
+            <button
+              onClick={handleManageBilling}
+              disabled={openingPortal}
+              className="bg-purple-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+            >
+              {openingPortal ? "Opening..." : "Manage Billing"}
             </button>
 
             <button
