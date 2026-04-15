@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DropResult,
+} from "@hello-pangea/dnd";
 
 type Job = {
   id: string;
@@ -302,6 +308,42 @@ export default function JobDetailPage() {
 
     return grouped;
   }, [filteredCandidates]);
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
+    const candidateId = result.draggableId;
+    const newStage = result.destination.droppableId;
+
+    if (!STAGE_OPTIONS.includes(newStage)) return;
+
+    const candidate = candidates.find((item) => item.id === candidateId);
+    if (!candidate) return;
+
+    const currentStage = candidate.stage || "Applied";
+    if (currentStage === newStage) return;
+
+    setCandidates((prevCandidates) =>
+      prevCandidates.map((item) =>
+        item.id === candidateId ? { ...item, stage: newStage } : item
+      )
+    );
+
+    const { error } = await supabase
+      .from("candidates")
+      .update({ stage: newStage })
+      .eq("id", candidateId);
+
+    if (error) {
+      alert(error.message);
+
+      setCandidates((prevCandidates) =>
+        prevCandidates.map((item) =>
+          item.id === candidateId ? { ...item, stage: currentStage } : item
+        )
+      );
+    }
+  };
 
   if (checkingAuth) {
     return (
@@ -623,63 +665,93 @@ export default function JobDetailPage() {
               ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 min-w-[1200px]">
-                {STAGE_OPTIONS.map((stage) => (
-                  <div
-                    key={stage}
-                    className="bg-gray-50 border border-gray-200 rounded-xl p-4"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-lg">{stage}</h3>
-                      <span className="text-sm bg-white border border-gray-200 rounded-full px-2 py-1">
-                        {candidatesByStage[stage]?.length || 0}
-                      </span>
-                    </div>
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <div className="overflow-x-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 min-w-[1200px]">
+                  {STAGE_OPTIONS.map((stage) => (
+                    <Droppable droppableId={stage} key={stage}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={`border rounded-xl p-4 min-h-[400px] ${
+                            snapshot.isDraggingOver
+                              ? "bg-blue-50 border-blue-300"
+                              : "bg-gray-50 border-gray-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-lg">{stage}</h3>
+                            <span className="text-sm bg-white border border-gray-200 rounded-full px-2 py-1">
+                              {candidatesByStage[stage]?.length || 0}
+                            </span>
+                          </div>
 
-                    <div className="space-y-3">
-                      {(candidatesByStage[stage] || []).length === 0 ? (
-                        <p className="text-sm text-gray-400">
-                          No candidates
-                        </p>
-                      ) : (
-                        candidatesByStage[stage].map((candidate) => (
-                          <button
-                            key={candidate.id}
-                            onClick={() =>
-                              router.push(
-                                `/jobs/${jobId}/candidates/${candidate.id}`
+                          <div className="space-y-3">
+                            {(candidatesByStage[stage] || []).length === 0 ? (
+                              <p className="text-sm text-gray-400">
+                                No candidates
+                              </p>
+                            ) : (
+                              candidatesByStage[stage].map(
+                                (candidate, index) => (
+                                  <Draggable
+                                    draggableId={candidate.id}
+                                    index={index}
+                                    key={candidate.id}
+                                  >
+                                    {(providedDraggable, snapshotDraggable) => (
+                                      <button
+                                        ref={providedDraggable.innerRef}
+                                        {...providedDraggable.draggableProps}
+                                        {...providedDraggable.dragHandleProps}
+                                        onClick={() =>
+                                          router.push(
+                                            `/jobs/${jobId}/candidates/${candidate.id}`
+                                          )
+                                        }
+                                        className={`w-full text-left border rounded-lg p-3 transition ${
+                                          snapshotDraggable.isDragging
+                                            ? "bg-blue-100 border-blue-300 shadow-lg"
+                                            : "bg-white border-gray-200 hover:bg-gray-100"
+                                        }`}
+                                      >
+                                        <h4 className="font-semibold text-sm">
+                                          {candidate.full_name}
+                                        </h4>
+                                        <p className="text-xs text-gray-600 mt-1 break-words">
+                                          {candidate.email}
+                                        </p>
+
+                                        {candidate.interview_date && (
+                                          <p className="text-xs text-blue-600 mt-2">
+                                            Interview:{" "}
+                                            {formatInterviewDate(
+                                              candidate.interview_date
+                                            )}
+                                          </p>
+                                        )}
+
+                                        {candidate.resume_url && (
+                                          <p className="text-xs text-green-600 mt-2">
+                                            Resume uploaded
+                                          </p>
+                                        )}
+                                      </button>
+                                    )}
+                                  </Draggable>
+                                )
                               )
-                            }
-                            className="w-full text-left bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition"
-                          >
-                            <h4 className="font-semibold text-sm">
-                              {candidate.full_name}
-                            </h4>
-                            <p className="text-xs text-gray-600 mt-1 break-words">
-                              {candidate.email}
-                            </p>
-
-                            {candidate.interview_date && (
-                              <p className="text-xs text-blue-600 mt-2">
-                                Interview:{" "}
-                                {formatInterviewDate(candidate.interview_date)}
-                              </p>
                             )}
-
-                            {candidate.resume_url && (
-                              <p className="text-xs text-green-600 mt-2">
-                                Resume uploaded
-                              </p>
-                            )}
-                          </button>
-                        ))
+                            {provided.placeholder}
+                          </div>
+                        </div>
                       )}
-                    </div>
-                  </div>
-                ))}
+                    </Droppable>
+                  ))}
+                </div>
               </div>
-            </div>
+            </DragDropContext>
           )}
         </div>
       </div>
