@@ -701,19 +701,14 @@ export default function JobDetailPage() {
                                     key={candidate.id}
                                   >
                                     {(providedDraggable, snapshotDraggable) => (
-                                      <button
+                                      <div
                                         ref={providedDraggable.innerRef}
                                         {...providedDraggable.draggableProps}
                                         {...providedDraggable.dragHandleProps}
-                                        onClick={() =>
-                                          router.push(
-                                            `/jobs/${jobId}/candidates/${candidate.id}`
-                                          )
-                                        }
-                                        className={`w-full text-left border rounded-lg p-3 transition ${
+                                        className={`w-full border rounded-lg p-3 transition ${
                                           snapshotDraggable.isDragging
                                             ? "bg-blue-100 border-blue-300 shadow-lg"
-                                            : "bg-white border-gray-200 hover:bg-gray-100"
+                                            : "bg-white border-gray-200"
                                         }`}
                                       >
                                         <h4 className="font-semibold text-sm">
@@ -737,7 +732,19 @@ export default function JobDetailPage() {
                                             Resume uploaded
                                           </p>
                                         )}
-                                      </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            router.push(
+                                              `/jobs/${jobId}/candidates/${candidate.id}`
+                                            )
+                                          }
+                                          className="mt-3 text-xs bg-black text-white px-3 py-1 rounded"
+                                        >
+                                          Open Candidate
+                                        </button>
+                                      </div>
                                     )}
                                   </Draggable>
                                 )
