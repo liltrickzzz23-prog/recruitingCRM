@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resendApiKey = process.env.RESEND_API_KEY;
-const fromEmail = process.env.RESEND_FROM_EMAIL;
-const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+const resendApiKey = process.env.RESEND_API_KEY!;
+const fromEmail = process.env.RESEND_FROM_EMAIL!;
+const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
 if (!resendApiKey) {
   throw new Error("Missing RESEND_API_KEY");
@@ -52,17 +52,15 @@ export async function POST(req: Request) {
       inviteeEmail
     )}`;
 
-    const { error } = await resend.emails.send({
+    const response = await resend.emails.send({
       from: fromEmail,
       to: inviteeEmail,
-      subject: `You’ve been invited to join ${teamName}`,
+      subject: `You've been invited to join ${teamName}`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
-          <h2>You’ve been invited to join ${teamName}</h2>
+          <h2>You've been invited to join ${teamName}</h2>
           <p>You were invited to join a team inside Recruiting CRM.</p>
-          <p>
-            Click the button below to create your account and join the team:
-          </p>
+          <p>Click the button below to create your account and join the team:</p>
           <p style="margin: 24px 0;">
             <a
               href="${signupUrl}"
@@ -84,9 +82,9 @@ export async function POST(req: Request) {
       `,
     });
 
-    if (error) {
+    if (response.error) {
       return NextResponse.json(
-        { error: error.message || "Failed to send invite email" },
+        { error: response.error.message || "Failed to send invite email" },
         { status: 500 }
       );
     }
