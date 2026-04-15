@@ -18,6 +18,15 @@ type Candidate = {
   created_at: string;
 };
 
+type Profile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  company_name: string | null;
+  company_logo_url: string | null;
+  recruiter_signature: string | null;
+};
+
 const STAGE_OPTIONS = [
   "Applied",
   "Reviewed",
@@ -35,6 +44,7 @@ export default function CandidateDetailPage() {
   const candidateId = params.candidateId as string;
 
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -64,6 +74,22 @@ export default function CandidateDetailPage() {
     return `${month}/${day}/${year} at ${hour}:${minute} ${suffix}`;
   };
 
+  const getSignatureText = () => {
+    if (profile?.recruiter_signature && profile.recruiter_signature.trim() !== "") {
+      return profile.recruiter_signature;
+    }
+
+    if (profile?.full_name && profile?.company_name) {
+      return `Best,\n${profile.full_name}\n${profile.company_name}`;
+    }
+
+    if (profile?.full_name) {
+      return `Best,\n${profile.full_name}`;
+    }
+
+    return "Best,\nHiring Team";
+  };
+
   const createMailtoLink = (subjectText: string, bodyText: string) => {
     if (!candidate) return "#";
 
@@ -82,8 +108,7 @@ export default function CandidateDetailPage() {
 
 Thank you for your application. I wanted to follow up with you regarding the role.
 
-Best,
-Hiring Team`
+${getSignatureText()}`
     );
   };
 
@@ -106,8 +131,7 @@ ${interviewText}
 
 Please reply to confirm your availability.
 
-Best,
-Hiring Team`
+${getSignatureText()}`
     );
   };
 
@@ -122,8 +146,7 @@ Thank you for taking the time to apply for this role.
 
 At this time, we have decided to move forward with other candidates. We appreciate your interest and wish you the best in your job search.
 
-Best,
-Hiring Team`
+${getSignatureText()}`
     );
   };
 
@@ -138,8 +161,7 @@ I wanted to follow up regarding your application and see if you have any questio
 
 Looking forward to hearing from you.
 
-Best,
-Hiring Team`
+${getSignatureText()}`
     );
   };
 
@@ -156,6 +178,18 @@ Hiring Team`
 
       setAuthorized(true);
       setCheckingAuth(false);
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select(
+          "id, email, full_name, company_name, company_logo_url, recruiter_signature"
+        )
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (profileData) {
+        setProfile(profileData);
+      }
 
       const { data, error } = await supabase
         .from("candidates")
@@ -267,51 +301,67 @@ Hiring Team`
 
         <div className="bg-white rounded-xl shadow p-8">
           <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-            <div>
-              <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
+            <div className="flex items-start gap-4">
+              {profile?.company_logo_url ? (
+                <img
+                  src={profile.company_logo_url}
+                  alt="Company logo"
+                  className="h-14 w-14 rounded-lg object-contain border border-gray-200 bg-white p-2"
+                />
+              ) : null}
 
-              <div className="mt-6 space-y-2">
-                <p className="text-gray-700">
-                  <span className="font-semibold">Email:</span> {candidate.email}
-                </p>
-                <p className="text-gray-700">
-                  <span className="font-semibold">Phone:</span>{" "}
-                  {candidate.phone || "No phone provided"}
-                </p>
+              <div>
+                <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
 
-                {candidate.linkedin_url ? (
-                  <p>
-                    <a
-                      href={candidate.linkedin_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      View LinkedIn
-                    </a>
+                {profile?.company_name ? (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {profile.company_name}
                   </p>
-                ) : (
-                  <p className="text-gray-500">No LinkedIn URL</p>
-                )}
+                ) : null}
 
-                {candidate.resume_url ? (
-                  <p>
-                    <a
-                      href={candidate.resume_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-green-600 hover:underline"
-                    >
-                      View Resume
-                    </a>
+                <div className="mt-6 space-y-2">
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Email:</span> {candidate.email}
                   </p>
-                ) : (
-                  <p className="text-gray-500">No resume uploaded</p>
-                )}
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Phone:</span>{" "}
+                    {candidate.phone || "No phone provided"}
+                  </p>
 
-                <p className="text-sm text-gray-400">
-                  Applied: {new Date(candidate.created_at).toLocaleDateString()}
-                </p>
+                  {candidate.linkedin_url ? (
+                    <p>
+                      <a
+                        href={candidate.linkedin_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        View LinkedIn
+                      </a>
+                    </p>
+                  ) : (
+                    <p className="text-gray-500">No LinkedIn URL</p>
+                  )}
+
+                  {candidate.resume_url ? (
+                    <p>
+                      <a
+                        href={candidate.resume_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-green-600 hover:underline"
+                      >
+                        View Resume
+                      </a>
+                    </p>
+                  ) : (
+                    <p className="text-gray-500">No resume uploaded</p>
+                  )}
+
+                  <p className="text-sm text-gray-400">
+                    Applied: {new Date(candidate.created_at).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
             </div>
 

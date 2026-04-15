@@ -183,12 +183,19 @@ export default function DashboardPage() {
             <p className="text-blue-600 mt-2">Logged in as: {userEmail}</p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={() => router.push("/jobs/new")}
               className="bg-black text-white px-6 py-3 rounded-lg"
             >
               New Job
+            </button>
+
+            <button
+              onClick={() => router.push("/settings")}
+              className="bg-gray-800 text-white px-6 py-3 rounded-lg"
+            >
+              Settings
             </button>
 
             <button
