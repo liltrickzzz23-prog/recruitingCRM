@@ -23,6 +23,12 @@ type Candidate = {
   job_id: string;
 };
 
+type Profile = {
+  id: string;
+  subscription_status: string | null;
+  stripe_customer_id: string | null;
+};
+
 const STAGE_OPTIONS = [
   "Applied",
   "Reviewed",
@@ -32,15 +38,20 @@ const STAGE_OPTIONS = [
   "Rejected",
 ];
 
+const PAID_STATUSES = ["active", "trialing"];
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
+
+  const isPaid = PAID_STATUSES.includes(profile?.subscription_status || "");
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -75,6 +86,16 @@ export default function DashboardPage() {
 
       setUserEmail(session.user.email || "");
 
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("id, subscription_status, stripe_customer_id")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (profileData) {
+        setProfile(profileData);
+      }
+
       const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
         .select("id, title, location, employment_type, status, created_at")
@@ -100,7 +121,9 @@ export default function DashboardPage() {
 
       const { data: candidatesData, error: candidatesError } = await supabase
         .from("candidates")
-        .select("id, full_name, email, stage, interview_date, created_at, job_id")
+        .select(
+          "id, full_name, email, stage, interview_date, created_at, job_id"
+        )
         .in("job_id", jobIds)
         .order("created_at", { ascending: false });
 
@@ -182,9 +205,20 @@ export default function DashboardPage() {
     }
   };
 
+  const handleOpenInterviews = () => {
+    if (!isPaid) {
+      alert("Interview Scheduler is a Pro feature. Please subscribe to unlock it.");
+      return;
+    }
+
+    router.push("/interviews");
+  };
+
   const analytics = useMemo(() => {
     const totalJobs = jobs.length;
-    const openJobs = jobs.filter((job) => (job.status || "open") === "open").length;
+    const openJobs = jobs.filter(
+      (job) => (job.status || "open") === "open"
+    ).length;
     const closedJobs = jobs.filter((job) => job.status === "closed").length;
 
     const totalCandidates = candidates.length;
@@ -243,6 +277,18 @@ export default function DashboardPage() {
               Welcome to your Recruiting CRM
             </p>
             <p className="text-blue-600 mt-2">Logged in as: {userEmail}</p>
+
+            <div className="mt-4">
+              {isPaid ? (
+                <span className="inline-block rounded-full bg-green-100 text-green-700 px-3 py-1 text-sm font-medium">
+                  Pro Plan Active
+                </span>
+              ) : (
+                <span className="inline-block rounded-full bg-yellow-100 text-yellow-700 px-3 py-1 text-sm font-medium">
+                  Free Plan
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -254,8 +300,10 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push("/interviews")}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg"
+              onClick={handleOpenInterviews}
+              className={`px-6 py-3 rounded-lg text-white ${
+                isPaid ? "bg-blue-600" : "bg-gray-400"
+              }`}
             >
               Interviews
             </button>
@@ -268,20 +316,29 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={handleSubscribe}
-              disabled={startingCheckout}
-              className="bg-green-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+              onClick={() => router.push("/team")}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-lg"
             >
-              {startingCheckout ? "Starting..." : "Subscribe"}
+              Team
             </button>
 
-            <button
-              onClick={handleManageBilling}
-              disabled={openingPortal}
-              className="bg-purple-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
-            >
-              {openingPortal ? "Opening..." : "Manage Billing"}
-            </button>
+            {!isPaid ? (
+              <button
+                onClick={handleSubscribe}
+                disabled={startingCheckout}
+                className="bg-green-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+              >
+                {startingCheckout ? "Starting..." : "Upgrade to Pro"}
+              </button>
+            ) : (
+              <button
+                onClick={handleManageBilling}
+                disabled={openingPortal}
+                className="bg-purple-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+              >
+                {openingPortal ? "Opening..." : "Manage Billing"}
+              </button>
+            )}
 
             <button
               onClick={handleLogout}
@@ -292,61 +349,97 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Total Jobs</p>
-            <h2 className="text-5xl font-bold mt-2">{analytics.totalJobs}</h2>
+        {!isPaid && (
+          <div className="bg-white rounded-xl shadow p-6 mb-8 border border-yellow-200">
+            <h2 className="text-2xl font-bold">Upgrade to Pro</h2>
+            <p className="text-gray-600 mt-2">
+              Unlock interview scheduling, full analytics, and more premium
+              features.
+            </p>
+            <button
+              onClick={handleSubscribe}
+              disabled={startingCheckout}
+              className="mt-4 bg-green-600 text-white px-5 py-3 rounded-lg disabled:opacity-50"
+            >
+              {startingCheckout ? "Starting..." : "Subscribe Now"}
+            </button>
           </div>
+        )}
 
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Open Jobs</p>
-            <h2 className="text-5xl font-bold mt-2">{analytics.openJobs}</h2>
-          </div>
+        {isPaid ? (
+          <>
+            <div className="grid md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Total Jobs</p>
+                <h2 className="text-5xl font-bold mt-2">{analytics.totalJobs}</h2>
+              </div>
 
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Closed Jobs</p>
-            <h2 className="text-5xl font-bold mt-2">{analytics.closedJobs}</h2>
-          </div>
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Open Jobs</p>
+                <h2 className="text-5xl font-bold mt-2">{analytics.openJobs}</h2>
+              </div>
 
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Total Candidates</p>
-            <h2 className="text-5xl font-bold mt-2">
-              {analytics.totalCandidates}
-            </h2>
-          </div>
-        </div>
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Closed Jobs</p>
+                <h2 className="text-5xl font-bold mt-2">{analytics.closedJobs}</h2>
+              </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Interviews Scheduled</p>
-            <h2 className="text-5xl font-bold mt-2">
-              {analytics.interviewsScheduled}
-            </h2>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Hired</p>
-            <h2 className="text-5xl font-bold mt-2">{analytics.hiredCount}</h2>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow">
-            <p className="text-gray-500">Applied</p>
-            <h2 className="text-5xl font-bold mt-2">
-              {analytics.stageCounts["Applied"]}
-            </h2>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          {STAGE_OPTIONS.map((stage) => (
-            <div key={stage} className="bg-white p-6 rounded-xl shadow">
-              <p className="text-gray-500">{stage}</p>
-              <h2 className="text-4xl font-bold mt-2">
-                {analytics.stageCounts[stage]}
-              </h2>
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Total Candidates</p>
+                <h2 className="text-5xl font-bold mt-2">
+                  {analytics.totalCandidates}
+                </h2>
+              </div>
             </div>
-          ))}
-        </div>
+
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Interviews Scheduled</p>
+                <h2 className="text-5xl font-bold mt-2">
+                  {analytics.interviewsScheduled}
+                </h2>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Hired</p>
+                <h2 className="text-5xl font-bold mt-2">{analytics.hiredCount}</h2>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow">
+                <p className="text-gray-500">Applied</p>
+                <h2 className="text-5xl font-bold mt-2">
+                  {analytics.stageCounts["Applied"]}
+                </h2>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              {STAGE_OPTIONS.map((stage) => (
+                <div key={stage} className="bg-white p-6 rounded-xl shadow">
+                  <p className="text-gray-500">{stage}</p>
+                  <h2 className="text-4xl font-bold mt-2">
+                    {analytics.stageCounts[stage]}
+                  </h2>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="bg-white rounded-xl shadow p-8 mb-8">
+            <h2 className="text-3xl font-bold">Analytics Locked</h2>
+            <p className="text-gray-600 mt-3">
+              Upgrade to Pro to unlock analytics, interview scheduling, and
+              premium workflow tools.
+            </p>
+            <button
+              onClick={handleSubscribe}
+              disabled={startingCheckout}
+              className="mt-5 bg-green-600 text-white px-5 py-3 rounded-lg disabled:opacity-50"
+            >
+              {startingCheckout ? "Starting..." : "Upgrade to Pro"}
+            </button>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white p-8 rounded-xl shadow">
@@ -378,15 +471,21 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-bold">Upcoming Interviews</h2>
 
-              <button
-                onClick={() => router.push("/interviews")}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View All
-              </button>
+              {isPaid ? (
+                <button
+                  onClick={() => router.push("/interviews")}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  View All
+                </button>
+              ) : null}
             </div>
 
-            {upcomingInterviews.length === 0 ? (
+            {!isPaid ? (
+              <p className="text-gray-600">
+                Upgrade to Pro to unlock the interview scheduler.
+              </p>
+            ) : upcomingInterviews.length === 0 ? (
               <p>No interviews scheduled.</p>
             ) : (
               upcomingInterviews.slice(0, 8).map((candidate) => (

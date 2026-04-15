@@ -18,6 +18,13 @@ type Candidate = {
   interview_date: string | null;
 };
 
+type Profile = {
+  id: string;
+  subscription_status: string | null;
+};
+
+const PAID_STATUSES = ["active", "trialing"];
+
 export default function InterviewsPage() {
   const router = useRouter();
 
@@ -27,6 +34,7 @@ export default function InterviewsPage() {
 
   const [jobsMap, setJobsMap] = useState<Record<string, string>>({});
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [isPaid, setIsPaid] = useState(false);
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -61,6 +69,20 @@ export default function InterviewsPage() {
 
       setAuthorized(true);
       setCheckingAuth(false);
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("id, subscription_status")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      const paid = PAID_STATUSES.includes(profileData?.subscription_status || "");
+      setIsPaid(paid);
+
+      if (!paid) {
+        setLoading(false);
+        return;
+      }
 
       const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
@@ -152,6 +174,35 @@ export default function InterviewsPage() {
       <main className="min-h-screen bg-gray-100 px-6 py-12">
         <div className="max-w-6xl mx-auto">
           <p className="text-gray-600">Loading interviews...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isPaid) {
+    return (
+      <main className="min-h-screen bg-gray-100 px-6 py-12">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mb-6 text-sm text-blue-600 hover:underline"
+          >
+            ← Back to Dashboard
+          </button>
+
+          <div className="bg-white rounded-xl shadow p-8">
+            <h1 className="text-3xl font-bold">Interview Scheduler Locked</h1>
+            <p className="text-gray-600 mt-3">
+              Upgrade to Pro to access interview scheduling.
+            </p>
+
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="mt-6 bg-black text-white px-5 py-3 rounded-lg"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </main>
     );
