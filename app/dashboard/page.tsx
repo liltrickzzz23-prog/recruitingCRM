@@ -192,6 +192,13 @@ export default function DashboardPage() {
             </button>
 
             <button
+              onClick={() => router.push("/interviews")}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg"
+            >
+              Interviews
+            </button>
+
+            <button
               onClick={() => router.push("/settings")}
               className="bg-gray-800 text-white px-6 py-3 rounded-lg"
             >
@@ -290,7 +297,16 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white p-8 rounded-xl shadow">
-            <h2 className="text-3xl font-bold mb-6">Upcoming Interviews</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-bold">Upcoming Interviews</h2>
+
+              <button
+                onClick={() => router.push("/interviews")}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                View All
+              </button>
+            </div>
 
             {upcomingInterviews.length === 0 ? (
               <p>No interviews scheduled.</p>
