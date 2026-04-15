@@ -116,6 +116,21 @@ export default function TeamPage() {
     loadTeamPage();
   }, [router]);
 
+  const reloadInvitations = async (teamId: string) => {
+    const { data: invitesData, error } = await supabase
+      .from("team_invitations")
+      .select("id, email, status, created_at")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setInvitations(invitesData || []);
+  };
+
   const handleCreateTeam = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -197,30 +212,52 @@ export default function TeamPage() {
 
     setSendingInvite(true);
 
-    const { error } = await supabase.from("team_invitations").insert({
-      team_id: team.id,
-      email: inviteEmail.trim().toLowerCase(),
-      invited_by_user_id: userId,
-      status: "pending",
-    });
+    const cleanEmail = inviteEmail.trim().toLowerCase();
 
-    if (error) {
-      alert(error.message);
+    const { data: newInvite, error: inviteInsertError } = await supabase
+      .from("team_invitations")
+      .insert({
+        team_id: team.id,
+        email: cleanEmail,
+        invited_by_user_id: userId,
+        status: "pending",
+      })
+      .select("id, email, status, created_at")
+      .single();
+
+    if (inviteInsertError) {
+      alert(inviteInsertError.message);
       setSendingInvite(false);
       return;
     }
 
-    const { data: invitesData } = await supabase
-      .from("team_invitations")
-      .select("id, email, status, created_at")
-      .eq("team_id", team.id)
-      .order("created_at", { ascending: false });
+    const emailResponse = await fetch("/api/team/send-invite", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        teamName: team.name,
+        inviteId: newInvite.id,
+      }),
+    });
 
-    setInvitations(invitesData || []);
+    const emailData = await emailResponse.json();
+
+    if (!emailResponse.ok) {
+      alert(emailData.error || "Invite was created, but email failed to send.");
+      await reloadInvitations(team.id);
+      setInviteEmail("");
+      setSendingInvite(false);
+      return;
+    }
+
+    await reloadInvitations(team.id);
     setInviteEmail("");
     setSendingInvite(false);
 
-    alert("Invitation created. We will connect acceptance next.");
+    alert("Invite created and email sent.");
   };
 
   if (checkingAuth) {
@@ -317,12 +354,12 @@ export default function TeamPage() {
                   disabled={sendingInvite}
                   className="bg-blue-600 text-white px-5 py-3 rounded-lg disabled:opacity-50"
                 >
-                  {sendingInvite ? "Sending Invite..." : "Create Invite"}
+                  {sendingInvite ? "Sending Invite..." : "Send Invite Email"}
                 </button>
               </form>
 
               <div className="mt-10">
-                <h3 className="text-xl font-bold mb-4">Pending Invitations</h3>
+                <h3 className="text-xl font-bold mb-4">Invitations</h3>
 
                 {invitations.length === 0 ? (
                   <p className="text-gray-500">No invitations yet.</p>
