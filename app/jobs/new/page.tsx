@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+type Profile = {
+  id: string;
+  team_id: string | null;
+};
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -11,12 +16,14 @@ export default function NewJobPage() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [employmentType, setEmploymentType] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [authorized, setAuthorized] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [userId, setUserId] = useState("");
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const loadUser = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -26,37 +33,65 @@ export default function NewJobPage() {
         return;
       }
 
-      setAuthorized(true);
+      setUserId(session.user.id);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, team_id")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        alert(profileError.message);
+        setCheckingAuth(false);
+        return;
+      }
+
+      setTeamId(profileData?.team_id || null);
       setCheckingAuth(false);
     };
 
-    checkAuth();
+    loadUser();
   }, [router]);
 
-  const handleCreateJob = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      alert("You must be logged in to create a job.");
-      setLoading(false);
-      router.replace("/login");
+    if (!title.trim()) {
+      alert("Please enter a job title.");
       return;
     }
 
-    const { error } = await supabase.from("jobs").insert([
-      {
-        user_id: session.user.id,
-        title,
-        description,
-        location,
+    if (!description.trim()) {
+      alert("Please enter a description.");
+      return;
+    }
+
+    if (!location.trim()) {
+      alert("Please enter a location.");
+      return;
+    }
+
+    if (!employmentType.trim()) {
+      alert("Please choose an employment type.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("jobs")
+      .insert({
+        user_id: userId,
+        team_id: teamId,
+        title: title.trim(),
+        description: description.trim(),
+        location: location.trim(),
         employment_type: employmentType,
-      },
-    ]);
+        status: "open",
+      })
+      .select("id")
+      .single();
 
     if (error) {
       alert(error.message);
@@ -64,97 +99,105 @@ export default function NewJobPage() {
       return;
     }
 
-    alert("Job created successfully.");
-    router.push("/dashboard");
+    setLoading(false);
+    router.push(`/jobs/${data.id}`);
   };
 
   if (checkingAuth) {
     return (
-      <main className="min-h-screen bg-gray-100">
-        <div className="max-w-2xl mx-auto px-6 py-12">
-          <p className="text-gray-600">Checking access...</p>
+      <main className="min-h-screen bg-gray-100 px-6 py-12">
+        <div className="max-w-3xl mx-auto">
+          <p className="text-gray-600">Loading...</p>
         </div>
       </main>
     );
   }
 
-  if (!authorized) {
-    return null;
-  }
-
   return (
-    <main className="min-h-screen bg-gray-100">
-      <div className="max-w-2xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold">Create New Job</h1>
-        <p className="text-gray-600 mt-2">
-          Add a new job posting to your recruiting dashboard.
-        </p>
-
-        <form
-          onSubmit={handleCreateJob}
-          className="mt-8 space-y-5 bg-white p-6 rounded-xl shadow"
+    <main className="min-h-screen bg-gray-100 px-6 py-12">
+      <div className="max-w-3xl mx-auto">
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="mb-6 text-sm text-blue-600 hover:underline"
         >
-          <div>
-            <label className="block text-sm font-medium mb-1">Job Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              placeholder="Example: Sales Associate"
-              required
-            />
-          </div>
+          ← Back to Dashboard
+        </button>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 min-h-[120px]"
-              placeholder="Describe the role, responsibilities, and requirements"
-            />
-          </div>
+        <div className="bg-white rounded-xl shadow p-8">
+          <h1 className="text-4xl font-bold">Create New Job</h1>
+          <p className="text-gray-600 mt-2">
+            Add a new job posting to your recruiting dashboard.
+          </p>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Location</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              placeholder="Example: Atlanta, GA"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Job Title
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                placeholder="Example: Sales Associate"
+                required
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Employment Type
-            </label>
-            <select
-              value={employmentType}
-              onChange={(e) => setEmploymentType(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              required
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 min-h-[140px]"
+                placeholder="Describe the role, responsibilities, and requirements"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Location
+              </label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                placeholder="Example: Atlanta, GA"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Employment Type
+              </label>
+              <select
+                value={employmentType}
+                onChange={(e) => setEmploymentType(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                required
+              >
+                <option value="">Select one</option>
+                <option value="Full-Time">Full-Time</option>
+                <option value="Part-Time">Part-Time</option>
+                <option value="Contract">Contract</option>
+                <option value="Internship">Internship</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-black text-white px-4 py-3 rounded-lg disabled:opacity-50"
             >
-              <option value="">Select one</option>
-              <option value="Full-Time">Full-Time</option>
-              <option value="Part-Time">Part-Time</option>
-              <option value="Contract">Contract</option>
-              <option value="Internship">Internship</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-black text-white px-4 py-2 font-medium disabled:opacity-50"
-          >
-            {loading ? "Creating Job..." : "Create Job"}
-          </button>
-        </form>
+              {loading ? "Creating Job..." : "Create Job"}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );
