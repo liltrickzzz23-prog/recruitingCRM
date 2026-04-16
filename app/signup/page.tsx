@@ -1,17 +1,26 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const invitedEmail = searchParams.get("email");
+
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+    }
+  }, [searchParams]);
 
   const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,18 +52,6 @@ export default function SignupPage() {
       return;
     }
 
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: user.id,
-      email: cleanEmail,
-      full_name: fullName || null,
-    });
-
-    if (profileError) {
-      alert(profileError.message);
-      setLoading(false);
-      return;
-    }
-
     const { data: inviteData, error: inviteLookupError } = await supabase
       .from("team_invitations")
       .select("id, team_id, status")
@@ -70,20 +67,23 @@ export default function SignupPage() {
       return;
     }
 
-    if (inviteData?.team_id) {
-      const { error: joinTeamError } = await supabase
-        .from("profiles")
-        .update({
-          team_id: inviteData.team_id,
-        })
-        .eq("id", user.id);
+    const assignedTeamId = inviteData?.team_id || null;
 
-      if (joinTeamError) {
-        alert(joinTeamError.message);
-        setLoading(false);
-        return;
-      }
+    const { error: profileError } = await supabase.from("profiles").upsert({
+      id: user.id,
+      email: cleanEmail,
+      full_name: fullName || null,
+      team_id: assignedTeamId,
+      role: assignedTeamId ? "recruiter" : "recruiter",
+    });
 
+    if (profileError) {
+      alert(profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (inviteData?.id) {
       const { error: inviteUpdateError } = await supabase
         .from("team_invitations")
         .update({
