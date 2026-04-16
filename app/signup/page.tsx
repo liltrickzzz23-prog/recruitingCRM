@@ -67,23 +67,21 @@ export default function SignupPage() {
       return;
     }
 
-    const assignedTeamId = inviteData?.team_id || null;
+    if (inviteData?.team_id) {
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
+          team_id: inviteData.team_id,
+          role: "recruiter",
+        })
+        .eq("id", user.id);
 
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: user.id,
-      email: cleanEmail,
-      full_name: fullName || null,
-      team_id: assignedTeamId,
-      role: assignedTeamId ? "recruiter" : "recruiter",
-    });
+      if (profileUpdateError) {
+        alert(profileUpdateError.message);
+        setLoading(false);
+        return;
+      }
 
-    if (profileError) {
-      alert(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (inviteData?.id) {
       const { error: inviteUpdateError } = await supabase
         .from("team_invitations")
         .update({
