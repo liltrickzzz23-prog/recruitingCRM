@@ -30,7 +30,7 @@ export default function SignupPage() {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    const { data: signupData, error: signupError } = await supabase.auth.signUp({
+    const { error: signupError } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
       options: {
@@ -46,61 +46,9 @@ export default function SignupPage() {
       return;
     }
 
-    const user = signupData.user;
-
-    if (!user) {
-      alert("Signup completed, but no user was returned.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: inviteData, error: inviteLookupError } = await supabase
-      .from("team_invitations")
-      .select("id, team_id, status")
-      .eq("email", cleanEmail)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (inviteLookupError) {
-      alert(inviteLookupError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (inviteData?.team_id) {
-      const { error: profileUpdateError } = await supabase
-        .from("profiles")
-        .update({
-          team_id: inviteData.team_id,
-          role: "recruiter",
-        })
-        .eq("id", user.id);
-
-      if (profileUpdateError) {
-        alert(profileUpdateError.message);
-        setLoading(false);
-        return;
-      }
-
-      const { error: inviteUpdateError } = await supabase
-        .from("team_invitations")
-        .update({
-          status: "accepted",
-        })
-        .eq("id", inviteData.id);
-
-      if (inviteUpdateError) {
-        alert(inviteUpdateError.message);
-        setLoading(false);
-        return;
-      }
-    }
-
-    alert("Account created successfully.");
+    alert("Account created successfully. Please log in to finish joining the team.");
     setLoading(false);
-    router.push("/dashboard");
+    router.push("/login");
   };
 
   return (

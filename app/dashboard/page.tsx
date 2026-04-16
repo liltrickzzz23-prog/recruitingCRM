@@ -27,6 +27,9 @@ type Profile = {
   id: string;
   subscription_status: string | null;
   stripe_customer_id: string | null;
+  email: string | null;
+  team_id: string | null;
+  role: string | null;
 };
 
 const STAGE_OPTIONS = [
@@ -84,23 +87,100 @@ export default function DashboardPage() {
         return;
       }
 
-      setUserEmail(session.user.email || "");
+      const currentEmail = (session.user.email || "").toLowerCase();
+      setUserEmail(currentEmail);
 
-      const { data: profileData } = await supabase
+      const { data: currentProfile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, subscription_status, stripe_customer_id")
+        .select("id, subscription_status, stripe_customer_id, email, team_id, role")
         .eq("id", session.user.id)
         .maybeSingle();
 
-      if (profileData) {
-        setProfile(profileData);
+      if (profileError) {
+        alert(profileError.message);
+        setLoading(false);
+        return;
       }
 
-      const { data: jobsData, error: jobsError } = await supabase
+      let workingProfile = currentProfile || null;
+
+      const { data: inviteData, error: inviteLookupError } = await supabase
+        .from("team_invitations")
+        .select("id, team_id, status")
+        .eq("email", currentEmail)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inviteLookupError) {
+        alert(inviteLookupError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (inviteData?.team_id) {
+        const { error: profileUpdateError } = await supabase
+          .from("profiles")
+          .update({
+            team_id: inviteData.team_id,
+            role: "recruiter",
+          })
+          .eq("id", session.user.id);
+
+        if (profileUpdateError) {
+          alert(`Profile team join failed: ${profileUpdateError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const { error: inviteUpdateError } = await supabase
+          .from("team_invitations")
+          .update({
+            status: "accepted",
+          })
+          .eq("id", inviteData.id);
+
+        if (inviteUpdateError) {
+          alert(`Invite accept failed: ${inviteUpdateError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const { data: refreshedProfile, error: refreshedProfileError } =
+          await supabase
+            .from("profiles")
+            .select("id, subscription_status, stripe_customer_id, email, team_id, role")
+            .eq("id", session.user.id)
+            .maybeSingle();
+
+        if (refreshedProfileError) {
+          alert(refreshedProfileError.message);
+          setLoading(false);
+          return;
+        }
+
+        workingProfile = refreshedProfile || workingProfile;
+      }
+
+      if (workingProfile) {
+        setProfile(workingProfile);
+      }
+
+      const activeTeamId = workingProfile?.team_id || null;
+
+      let jobsQuery = supabase
         .from("jobs")
         .select("id, title, location, employment_type, status, created_at")
-        .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
+
+      if (activeTeamId) {
+        jobsQuery = jobsQuery.eq("team_id", activeTeamId);
+      } else {
+        jobsQuery = jobsQuery.eq("user_id", session.user.id);
+      }
+
+      const { data: jobsData, error: jobsError } = await jobsQuery;
 
       if (jobsError) {
         console.error("Error loading jobs:", jobsError.message);
@@ -121,9 +201,7 @@ export default function DashboardPage() {
 
       const { data: candidatesData, error: candidatesError } = await supabase
         .from("candidates")
-        .select(
-          "id, full_name, email, stage, interview_date, created_at, job_id"
-        )
+        .select("id, full_name, email, stage, interview_date, created_at, job_id")
         .in("job_id", jobIds)
         .order("created_at", { ascending: false });
 
