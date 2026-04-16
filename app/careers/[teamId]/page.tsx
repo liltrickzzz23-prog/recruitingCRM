@@ -149,16 +149,16 @@ export default async function PublicCareersPage({
             <div className="mb-8">
               <h2 className="text-3xl font-bold">Open Positions</h2>
               <p className="text-gray-600 mt-2">
-                Browse our current openings and apply to the role that fits you
-                best.
+                Browse our current openings and learn more before applying.
               </p>
             </div>
 
             <div className="grid gap-6">
               {jobs.map((job) => (
-                <div
+                <Link
                   key={job.id}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow"
+                  href={`/careers/${teamId}/${job.id}`}
+                  className="block bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                     <div className="flex-1">
@@ -184,15 +184,12 @@ export default async function PublicCareersPage({
                     </div>
 
                     <div className="lg:w-auto">
-                      <Link
-                        href={`/jobs/${job.id}/apply`}
-                        className="inline-flex items-center justify-center bg-black text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity w-full lg:w-auto"
-                      >
-                        Apply Now
-                      </Link>
+                      <span className="inline-flex items-center justify-center bg-black text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity w-full lg:w-auto">
+                        View Job
+                      </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </>
