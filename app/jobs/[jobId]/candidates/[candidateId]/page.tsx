@@ -36,6 +36,13 @@ type ActivityLog = {
   action_type: string;
 };
 
+type CandidateComment = {
+  id: string;
+  comment_text: string;
+  created_at: string;
+  user_id: string | null;
+};
+
 const STAGE_OPTIONS = [
   "Applied",
   "Reviewed",
@@ -55,6 +62,7 @@ export default function CandidateDetailPage() {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [comments, setComments] = useState<CandidateComment[]>([]);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,6 +71,9 @@ export default function CandidateDetailPage() {
   const [notes, setNotes] = useState("");
   const [interviewDate, setInterviewDate] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -185,6 +196,21 @@ ${getSignatureText()}`
     setActivityLogs(data || []);
   };
 
+  const loadComments = async () => {
+    const { data, error } = await supabase
+      .from("candidate_comments")
+      .select("id, comment_text, created_at, user_id")
+      .eq("candidate_id", candidateId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load comments:", error.message);
+      return;
+    }
+
+    setComments(data || []);
+  };
+
   useEffect(() => {
     const loadCandidate = async () => {
       const {
@@ -231,6 +257,7 @@ ${getSignatureText()}`
       setNotes(data.notes || "");
       setInterviewDate(data.interview_date || "");
       await loadActivity();
+      await loadComments();
       setLoading(false);
     };
 
@@ -313,10 +340,50 @@ ${getSignatureText()}`
     alert("Candidate updated.");
   };
 
+  const handlePostComment = async () => {
+    if (!profile || !candidate) return;
+
+    const cleanComment = newComment.trim();
+
+    if (!cleanComment) {
+      alert("Please enter a comment.");
+      return;
+    }
+
+    setPostingComment(true);
+
+    const { error } = await supabase.from("candidate_comments").insert({
+      team_id: profile.team_id,
+      candidate_id: candidate.id,
+      user_id: profile.id,
+      comment_text: cleanComment,
+    });
+
+    if (error) {
+      alert(error.message);
+      setPostingComment(false);
+      return;
+    }
+
+    await logActivity({
+      teamId: profile.team_id,
+      userId: profile.id,
+      jobId,
+      candidateId: candidate.id,
+      actionType: "candidate_comment_added",
+      description: `Added internal comment on ${candidate.full_name}`,
+    });
+
+    setNewComment("");
+    await loadComments();
+    await loadActivity();
+    setPostingComment(false);
+  };
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <p className="text-gray-600">Checking access...</p>
         </div>
       </main>
@@ -330,7 +397,7 @@ ${getSignatureText()}`
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <p className="text-gray-600">Loading candidate...</p>
         </div>
       </main>
@@ -340,7 +407,7 @@ ${getSignatureText()}`
   if (!candidate) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold">Candidate Not Found</h1>
           <button
             onClick={() => router.push(`/jobs/${jobId}`)}
@@ -355,7 +422,7 @@ ${getSignatureText()}`
 
   return (
     <main className="min-h-screen bg-gray-100 px-6 py-12">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <button
           onClick={() => router.push(`/jobs/${jobId}`)}
           className="mb-6 text-sm text-blue-600 hover:underline"
@@ -364,166 +431,211 @@ ${getSignatureText()}`
         </button>
 
         <div className="grid lg:grid-cols-[2fr_1fr] gap-6">
-          <div className="bg-white rounded-xl shadow p-8">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-              <div className="flex items-start gap-4">
-                {profile?.company_logo_url ? (
-                  <img
-                    src={profile.company_logo_url}
-                    alt="Company logo"
-                    className="h-14 w-14 rounded-lg object-contain border border-gray-200 bg-white p-2"
-                  />
-                ) : null}
-
-                <div>
-                  <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
-
-                  {profile?.company_name ? (
-                    <p className="text-sm text-gray-500 mt-1">
-                      {profile.company_name}
-                    </p>
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow p-8">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                <div className="flex items-start gap-4">
+                  {profile?.company_logo_url ? (
+                    <img
+                      src={profile.company_logo_url}
+                      alt="Company logo"
+                      className="h-14 w-14 rounded-lg object-contain border border-gray-200 bg-white p-2"
+                    />
                   ) : null}
 
-                  <div className="mt-6 space-y-2">
-                    <p className="text-gray-700">
-                      <span className="font-semibold">Email:</span> {candidate.email}
-                    </p>
-                    <p className="text-gray-700">
-                      <span className="font-semibold">Phone:</span>{" "}
-                      {candidate.phone || "No phone provided"}
-                    </p>
+                  <div>
+                    <h1 className="text-3xl font-bold">{candidate.full_name}</h1>
 
-                    {candidate.linkedin_url ? (
-                      <p>
-                        <a
-                          href={candidate.linkedin_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-600 hover:underline"
-                        >
-                          View LinkedIn
-                        </a>
+                    {profile?.company_name ? (
+                      <p className="text-sm text-gray-500 mt-1">
+                        {profile.company_name}
                       </p>
-                    ) : (
-                      <p className="text-gray-500">No LinkedIn URL</p>
-                    )}
+                    ) : null}
 
-                    {candidate.resume_url ? (
-                      <p>
-                        <a
-                          href={candidate.resume_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-green-600 hover:underline"
-                        >
-                          View Resume
-                        </a>
+                    <div className="mt-6 space-y-2">
+                      <p className="text-gray-700">
+                        <span className="font-semibold">Email:</span> {candidate.email}
                       </p>
-                    ) : (
-                      <p className="text-gray-500">No resume uploaded</p>
-                    )}
+                      <p className="text-gray-700">
+                        <span className="font-semibold">Phone:</span>{" "}
+                        {candidate.phone || "No phone provided"}
+                      </p>
 
-                    <p className="text-sm text-gray-400">
-                      Applied: {new Date(candidate.created_at).toLocaleDateString()}
-                    </p>
+                      {candidate.linkedin_url ? (
+                        <p>
+                          <a
+                            href={candidate.linkedin_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            View LinkedIn
+                          </a>
+                        </p>
+                      ) : (
+                        <p className="text-gray-500">No LinkedIn URL</p>
+                      )}
+
+                      {candidate.resume_url ? (
+                        <p>
+                          <a
+                            href={candidate.resume_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-green-600 hover:underline"
+                          >
+                            View Resume
+                          </a>
+                        </p>
+                      ) : (
+                        <p className="text-gray-500">No resume uploaded</p>
+                      )}
+
+                      <p className="text-sm text-gray-400">
+                        Applied: {new Date(candidate.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-3 w-full md:w-auto">
+                  <a
+                    href={getGeneralEmailLink()}
+                    className="bg-black text-white px-4 py-2 rounded-lg text-center"
+                  >
+                    Email Candidate
+                  </a>
+
+                  <a
+                    href={getInterviewInviteLink()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-center"
+                  >
+                    Send Interview Invite
+                  </a>
+
+                  <a
+                    href={getRejectionEmailLink()}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-center"
+                  >
+                    Send Rejection
+                  </a>
+
+                  <a
+                    href={getFollowUpEmailLink()}
+                    className="bg-gray-700 text-white px-4 py-2 rounded-lg text-center"
+                  >
+                    Send Follow-up
+                  </a>
+
+                  <button
+                    onClick={() => router.push("/interviews")}
+                    className="bg-gray-200 text-black px-4 py-2 rounded-lg text-center"
+                  >
+                    View All Interviews
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 w-full md:w-auto">
-                <a
-                  href={getGeneralEmailLink()}
-                  className="bg-black text-white px-4 py-2 rounded-lg text-center"
+              <div className="mt-8">
+                <label className="block text-sm font-medium mb-2">
+                  Hiring Stage
+                </label>
+                <select
+                  value={stage}
+                  onChange={(e) => setStage(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
                 >
-                  Email Candidate
-                </a>
+                  {STAGE_OPTIONS.map((stageOption) => (
+                    <option key={stageOption} value={stageOption}>
+                      {stageOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <a
-                  href={getInterviewInviteLink()}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-center"
-                >
-                  Send Interview Invite
-                </a>
+              <div className="mt-6">
+                <label className="block text-sm font-medium mb-2">Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 min-h-[140px]"
+                  placeholder="Add notes about this candidate..."
+                />
+              </div>
 
-                <a
-                  href={getRejectionEmailLink()}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg text-center"
-                >
-                  Send Rejection
-                </a>
+              <div className="mt-6">
+                <label className="block text-sm font-medium mb-2">
+                  Interview Date
+                </label>
+                <input
+                  type="datetime-local"
+                  value={interviewDate}
+                  onChange={(e) => setInterviewDate(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
 
-                <a
-                  href={getFollowUpEmailLink()}
-                  className="bg-gray-700 text-white px-4 py-2 rounded-lg text-center"
-                >
-                  Send Follow-up
-                </a>
+                {candidate.interview_date && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Current Scheduled Time:{" "}
+                    {formatInterviewDate(candidate.interview_date)}
+                  </p>
+                )}
+              </div>
 
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="mt-8 bg-black text-white px-6 py-3 rounded-lg disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Candidate"}
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-8">
+              <h2 className="text-2xl font-bold">Internal Team Comments</h2>
+              <p className="text-gray-500 mt-2 text-sm">
+                Private discussion for your team about this candidate.
+              </p>
+
+              <div className="mt-6">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 min-h-[120px]"
+                  placeholder="Write an internal team comment..."
+                />
                 <button
-                  onClick={() => router.push("/interviews")}
-                  className="bg-gray-200 text-black px-4 py-2 rounded-lg text-center"
+                  onClick={handlePostComment}
+                  disabled={postingComment}
+                  className="mt-4 bg-indigo-600 text-white px-5 py-3 rounded-lg disabled:opacity-50"
                 >
-                  View All Interviews
+                  {postingComment ? "Posting..." : "Post Comment"}
                 </button>
               </div>
+
+              <div className="mt-8 space-y-4">
+                {comments.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No comments yet.</p>
+                ) : (
+                  comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <p className="text-sm whitespace-pre-wrap">
+                        {comment.comment_text}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-3">
+                        {new Date(comment.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-
-            <div className="mt-8">
-              <label className="block text-sm font-medium mb-2">
-                Hiring Stage
-              </label>
-              <select
-                value={stage}
-                onChange={(e) => setStage(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
-                {STAGE_OPTIONS.map((stageOption) => (
-                  <option key={stageOption} value={stageOption}>
-                    {stageOption}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium mb-2">Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 min-h-[140px]"
-                placeholder="Add notes about this candidate..."
-              />
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium mb-2">
-                Interview Date
-              </label>
-              <input
-                type="datetime-local"
-                value={interviewDate}
-                onChange={(e) => setInterviewDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
-
-              {candidate.interview_date && (
-                <p className="text-sm text-gray-600 mt-2">
-                  Current Scheduled Time:{" "}
-                  {formatInterviewDate(candidate.interview_date)}
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="mt-8 bg-black text-white px-6 py-3 rounded-lg disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Candidate"}
-            </button>
           </div>
 
-          <div className="bg-white rounded-xl shadow p-6">
+          <div className="bg-white rounded-xl shadow p-6 h-fit">
             <h2 className="text-2xl font-bold">Recent Activity</h2>
             <p className="text-gray-500 mt-2 text-sm">
               Changes made to this candidate.
