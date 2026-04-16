@@ -10,6 +10,7 @@ type Profile = {
   full_name: string | null;
   team_id: string | null;
   role: string | null;
+  company_name: string | null;
 };
 
 type Team = {
@@ -40,6 +41,7 @@ export default function TeamPage() {
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [appUrl, setAppUrl] = useState("");
   const [userId, setUserId] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [team, setTeam] = useState<Team | null>(null);
@@ -54,6 +56,12 @@ export default function TeamPage() {
   const [savingRoleId, setSavingRoleId] = useState("");
 
   const isOwner = profile?.role === "owner";
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setAppUrl(window.location.origin);
+    }
+  }, []);
 
   useEffect(() => {
     const loadTeamPage = async () => {
@@ -72,7 +80,7 @@ export default function TeamPage() {
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, email, full_name, team_id, role")
+        .select("id, email, full_name, team_id, role, company_name")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -318,6 +326,16 @@ export default function TeamPage() {
     alert("Role updated.");
   };
 
+  const careersUrl =
+    team && appUrl ? `${appUrl}/careers/${team.id}` : "";
+
+  const handleCopyCareersLink = async () => {
+    if (!careersUrl) return;
+
+    await navigator.clipboard.writeText(careersUrl);
+    alert("Careers page link copied.");
+  };
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 px-6 py-12">
@@ -394,6 +412,35 @@ export default function TeamPage() {
                 <p className="text-sm text-gray-500">
                   Created: {new Date(team.created_at).toLocaleDateString()}
                 </p>
+              </div>
+
+              <div className="mt-8 bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-xl font-bold">Public Careers Page</h3>
+                <p className="text-gray-600 mt-2">
+                  Share one public page with all your open jobs.
+                </p>
+
+                <div className="mt-4 flex flex-col md:flex-row gap-3 md:items-center">
+                  <p className="text-sm text-gray-600 break-all flex-1">
+                    {careersUrl || "Careers page will appear after team setup."}
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleCopyCareersLink}
+                      className="bg-black text-white px-4 py-2 rounded-lg"
+                    >
+                      Copy Link
+                    </button>
+
+                    <button
+                      onClick={() => window.open(careersUrl, "_blank")}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
+                    >
+                      Open Careers Page
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-10">
