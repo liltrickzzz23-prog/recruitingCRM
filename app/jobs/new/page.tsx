@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity";
 
 type Profile = {
   id: string;
@@ -79,12 +80,14 @@ export default function NewJobPage() {
 
     setLoading(true);
 
+    const cleanTitle = title.trim();
+
     const { data, error } = await supabase
       .from("jobs")
       .insert({
         user_id: userId,
         team_id: teamId,
-        title: title.trim(),
+        title: cleanTitle,
         description: description.trim(),
         location: location.trim(),
         employment_type: employmentType,
@@ -98,6 +101,14 @@ export default function NewJobPage() {
       setLoading(false);
       return;
     }
+
+    await logActivity({
+      teamId,
+      userId,
+      jobId: data.id,
+      actionType: "job_created",
+      description: `Created job "${cleanTitle}"`,
+    });
 
     setLoading(false);
     router.push(`/jobs/${data.id}`);
