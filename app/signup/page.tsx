@@ -1,12 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -15,12 +14,15 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const invitedEmail = searchParams.get("email");
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const invitedEmail = params.get("email");
 
     if (invitedEmail) {
       setEmail(invitedEmail);
     }
-  }, [searchParams]);
+  }, []);
 
   const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
