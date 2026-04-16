@@ -11,6 +11,8 @@ type Job = {
   employment_type: string | null;
   status: string | null;
   created_at: string;
+  user_id: string;
+  team_id: string | null;
 };
 
 type Candidate = {
@@ -171,7 +173,7 @@ export default function DashboardPage() {
 
       let jobsQuery = supabase
         .from("jobs")
-        .select("id, title, location, employment_type, status, created_at")
+        .select("id, title, location, employment_type, status, created_at, user_id, team_id")
         .order("created_at", { ascending: false });
 
       if (activeTeamId) {
@@ -188,16 +190,16 @@ export default function DashboardPage() {
         return;
       }
 
-      const userJobs = jobsData || [];
-      setJobs(userJobs);
+      const visibleJobs = jobsData || [];
+      setJobs(visibleJobs);
 
-      if (userJobs.length === 0) {
+      if (visibleJobs.length === 0) {
         setCandidates([]);
         setLoading(false);
         return;
       }
 
-      const jobIds = userJobs.map((job) => job.id);
+      const jobIds = visibleJobs.map((job) => job.id);
 
       const { data: candidatesData, error: candidatesError } = await supabase
         .from("candidates")
@@ -356,7 +358,7 @@ export default function DashboardPage() {
             </p>
             <p className="text-blue-600 mt-2">Logged in as: {userEmail}</p>
 
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
               {isPaid ? (
                 <span className="inline-block rounded-full bg-green-100 text-green-700 px-3 py-1 text-sm font-medium">
                   Pro Plan Active
@@ -364,6 +366,16 @@ export default function DashboardPage() {
               ) : (
                 <span className="inline-block rounded-full bg-yellow-100 text-yellow-700 px-3 py-1 text-sm font-medium">
                   Free Plan
+                </span>
+              )}
+
+              {profile?.team_id ? (
+                <span className="inline-block rounded-full bg-indigo-100 text-indigo-700 px-3 py-1 text-sm font-medium">
+                  Team Workspace
+                </span>
+              ) : (
+                <span className="inline-block rounded-full bg-gray-100 text-gray-700 px-3 py-1 text-sm font-medium">
+                  Personal Workspace
                 </span>
               )}
             </div>
@@ -540,6 +552,9 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-400 mt-1">
                     Status: {job.status || "open"}
                   </p>
+                  {job.team_id ? (
+                    <p className="text-xs text-indigo-600 mt-2">Shared team job</p>
+                  ) : null}
                 </div>
               ))
             )}

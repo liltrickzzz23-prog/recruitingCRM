@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 type Job = {
   id: string;
   title: string;
+  user_id: string;
+  team_id: string | null;
 };
 
 type Candidate = {
@@ -21,6 +23,7 @@ type Candidate = {
 type Profile = {
   id: string;
   subscription_status: string | null;
+  team_id: string | null;
 };
 
 const PAID_STATUSES = ["active", "trialing"];
@@ -35,6 +38,7 @@ export default function InterviewsPage() {
   const [jobsMap, setJobsMap] = useState<Record<string, string>>({});
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [isPaid, setIsPaid] = useState(false);
+  const [teamMode, setTeamMode] = useState(false);
 
   const formatInterviewDate = (dateString: string) => {
     const [datePart, timePart] = dateString.split("T");
@@ -70,11 +74,17 @@ export default function InterviewsPage() {
       setAuthorized(true);
       setCheckingAuth(false);
 
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, subscription_status")
+        .select("id, subscription_status, team_id")
         .eq("id", session.user.id)
         .maybeSingle();
+
+      if (profileError) {
+        alert(profileError.message);
+        setLoading(false);
+        return;
+      }
 
       const paid = PAID_STATUSES.includes(profileData?.subscription_status || "");
       setIsPaid(paid);
@@ -84,11 +94,21 @@ export default function InterviewsPage() {
         return;
       }
 
-      const { data: jobsData, error: jobsError } = await supabase
+      const activeTeamId = profileData?.team_id || null;
+      setTeamMode(!!activeTeamId);
+
+      let jobsQuery = supabase
         .from("jobs")
-        .select("id, title")
-        .eq("user_id", session.user.id)
+        .select("id, title, user_id, team_id")
         .order("created_at", { ascending: false });
+
+      if (activeTeamId) {
+        jobsQuery = jobsQuery.eq("team_id", activeTeamId);
+      } else {
+        jobsQuery = jobsQuery.eq("user_id", session.user.id);
+      }
+
+      const { data: jobsData, error: jobsError } = await jobsQuery;
 
       if (jobsError) {
         alert(jobsError.message);
@@ -225,6 +245,15 @@ export default function InterviewsPage() {
               <p className="text-gray-600 mt-2">
                 View all scheduled interviews in one place.
               </p>
+              {teamMode ? (
+                <p className="text-indigo-600 mt-2 text-sm font-medium">
+                  Team interviews view
+                </p>
+              ) : (
+                <p className="text-gray-500 mt-2 text-sm">
+                  Personal interviews view
+                </p>
+              )}
             </div>
 
             <button
