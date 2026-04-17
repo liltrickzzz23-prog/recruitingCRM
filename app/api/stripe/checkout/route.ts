@@ -43,12 +43,24 @@ export async function POST(req: Request) {
       customer_email: email,
     });
 
+    if (!session.url) {
+      return NextResponse.json(
+        { error: "Stripe did not return a checkout URL." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error("Stripe checkout error:", error);
 
     return NextResponse.json(
-      { error: "Unable to create checkout session." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to create checkout session.",
+      },
       { status: 500 }
     );
   }
