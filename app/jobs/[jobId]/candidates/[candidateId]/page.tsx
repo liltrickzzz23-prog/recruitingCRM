@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const RECOMMENDATION_OPTIONS = [
-  "Move Forward",
-  "Hold",
-  "Reject",
-];
+const RECOMMENDATION_OPTIONS = ["Move Forward", "Hold", "Reject"];
 
 export default function CandidatePage() {
   const params = useParams();
@@ -16,9 +12,11 @@ export default function CandidatePage() {
   const candidateId = params.candidateId as string;
 
   const [candidate, setCandidate] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [parsing, setParsing] = useState(false);
   const [savingScorecard, setSavingScorecard] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const [scoreOverall, setScoreOverall] = useState("");
   const [scoreCommunication, setScoreCommunication] = useState("");
@@ -27,6 +25,9 @@ export default function CandidatePage() {
   const [scoreStrengths, setScoreStrengths] = useState("");
   const [scoreConcerns, setScoreConcerns] = useState("");
   const [scoreRecommendation, setScoreRecommendation] = useState("Hold");
+
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
 
   const fetchCandidate = async () => {
     const { data, error } = await supabase
@@ -45,13 +46,157 @@ export default function CandidatePage() {
       setScoreConcerns(data.score_concerns || "");
       setScoreRecommendation(data.score_recommendation || "Hold");
     }
+  };
 
+  const fetchProfile = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return;
+    }
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("full_name, company_name, recruiter_signature")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (data) {
+      setProfile(data);
+    }
+  };
+
+  const loadPage = async () => {
+    setLoading(true);
+    await Promise.all([fetchCandidate(), fetchProfile()]);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchCandidate();
+    loadPage();
   }, [candidateId]);
+
+  const getSignatureText = () => {
+    if (profile?.recruiter_signature && profile.recruiter_signature.trim() !== "") {
+      return profile.recruiter_signature;
+    }
+
+    if (profile?.full_name && profile?.company_name) {
+      return `Best,\n${profile.full_name}\n${profile.company_name}`;
+    }
+
+    if (profile?.full_name) {
+      return `Best,\n${profile.full_name}`;
+    }
+
+    return "Best,\nHiring Team";
+  };
+
+  const fillGeneralTemplate = () => {
+    if (!candidate) return;
+
+    setEmailSubject("Following up on your application");
+    setEmailBody(`Hi ${candidate.full_name},
+
+Thank you for your application. I wanted to follow up with you regarding the role.
+
+${getSignatureText()}`);
+  };
+
+  const fillInterviewTemplate = () => {
+    if (!candidate) return;
+
+    const interviewLine = candidate.interview_date
+      ? `We would like to invite you to interview on ${new Date(
+          candidate.interview_date
+        ).toLocaleString()}.`
+      : "We would like to invite you to an interview.";
+
+    setEmailSubject("Interview Invitation");
+    setEmailBody(`Hi ${candidate.full_name},
+
+Thank you for your application.
+
+${interviewLine}
+
+Please reply to confirm your availability.
+
+${getSignatureText()}`);
+  };
+
+  const fillRejectionTemplate = () => {
+    if (!candidate) return;
+
+    setEmailSubject("Update on your application");
+    setEmailBody(`Hi ${candidate.full_name},
+
+Thank you for taking the time to apply for this role.
+
+At this time, we have decided to move forward with other candidates. We appreciate your interest and wish you the best in your job search.
+
+${getSignatureText()}`);
+  };
+
+  const fillFollowUpTemplate = () => {
+    if (!candidate) return;
+
+    setEmailSubject("Application Follow-Up");
+    setEmailBody(`Hi ${candidate.full_name},
+
+I wanted to follow up regarding your application and see if you have any questions for us.
+
+Looking forward to hearing from you.
+
+${getSignatureText()}`);
+  };
+
+  const handleSendEmail = async () => {
+    if (!candidate?.email) {
+      alert("Candidate email is missing.");
+      return;
+    }
+
+    if (!emailSubject.trim()) {
+      alert("Please enter an email subject.");
+      return;
+    }
+
+    if (!emailBody.trim()) {
+      alert("Please enter an email message.");
+      return;
+    }
+
+    try {
+      setSendingEmail(true);
+
+      const res = await fetch("/api/email/send-candidate-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: candidate.email,
+          subject: emailSubject.trim(),
+          message: emailBody.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send email");
+      }
+
+      alert("Email sent successfully.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to send email");
+      console.error(error);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   const handleParseResume = async () => {
     if (!candidate?.resume_url) {
@@ -175,6 +320,69 @@ export default function CandidatePage() {
           className="mt-4 bg-black text-white px-4 py-2 rounded disabled:opacity-50"
         >
           {parsing ? "Parsing..." : "AI Parse Resume"}
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-xl font-bold">Send Candidate Email</h2>
+        <p className="text-gray-500">
+          Send email directly from the CRM using templates or a custom message.
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={fillGeneralTemplate}
+            className="bg-gray-100 border border-gray-300 px-4 py-2 rounded-lg"
+          >
+            General
+          </button>
+          <button
+            onClick={fillInterviewTemplate}
+            className="bg-gray-100 border border-gray-300 px-4 py-2 rounded-lg"
+          >
+            Interview Invite
+          </button>
+          <button
+            onClick={fillRejectionTemplate}
+            className="bg-gray-100 border border-gray-300 px-4 py-2 rounded-lg"
+          >
+            Rejection
+          </button>
+          <button
+            onClick={fillFollowUpTemplate}
+            className="bg-gray-100 border border-gray-300 px-4 py-2 rounded-lg"
+          >
+            Follow-up
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Subject</label>
+          <input
+            type="text"
+            value={emailSubject}
+            onChange={(e) => setEmailSubject(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2"
+            placeholder="Enter email subject"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Message</label>
+          <textarea
+            value={emailBody}
+            onChange={(e) => setEmailBody(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 min-h-[220px]"
+            placeholder="Write your email message here..."
+          />
+        </div>
+
+        <button
+          onClick={handleSendEmail}
+          disabled={sendingEmail}
+          className="bg-indigo-600 text-white px-5 py-3 rounded-lg disabled:opacity-50"
+        >
+          {sendingEmail ? "Sending..." : `Send Email to ${candidate.full_name}`}
         </button>
       </div>
 
