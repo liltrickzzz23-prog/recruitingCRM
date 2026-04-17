@@ -23,6 +23,8 @@ type Candidate = {
   interview_date: string | null;
   created_at: string;
   job_id: string;
+  score_overall: number | null;
+  score_recommendation: string | null;
 };
 
 type Profile = {
@@ -203,7 +205,9 @@ export default function DashboardPage() {
 
       const { data: candidatesData, error: candidatesError } = await supabase
         .from("candidates")
-        .select("id, full_name, email, stage, interview_date, created_at, job_id")
+        .select(
+          "id, full_name, email, stage, interview_date, created_at, job_id, score_overall, score_recommendation"
+        )
         .in("job_id", jobIds)
         .order("created_at", { ascending: false });
 
@@ -336,6 +340,31 @@ export default function DashboardPage() {
         return dateA.localeCompare(dateB);
       });
   }, [candidates]);
+
+  const topCandidates = useMemo(() => {
+    const scoredCandidates = candidates.filter(
+      (candidate) => candidate.score_overall !== null && candidate.score_overall !== undefined
+    );
+
+    return [...scoredCandidates]
+      .sort((a, b) => {
+        const scoreDiff = (b.score_overall || 0) - (a.score_overall || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+
+        return b.created_at.localeCompare(a.created_at);
+      })
+      .slice(0, 8);
+  }, [candidates]);
+
+  const jobTitleMap = useMemo(() => {
+    const map: Record<string, string> = {};
+
+    jobs.forEach((job) => {
+      map[job.id] = job.title;
+    });
+
+    return map;
+  }, [jobs]);
 
   if (loading) {
     return (
@@ -531,7 +560,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white p-8 rounded-xl shadow">
             <h2 className="text-3xl font-bold mb-6">Recent Jobs</h2>
 
@@ -595,6 +624,63 @@ export default function DashboardPage() {
               ))
             )}
           </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-xl shadow">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-3xl font-bold">Candidate Leaderboard</h2>
+              <p className="text-gray-600 mt-2">
+                Top scored candidates across your visible jobs.
+              </p>
+            </div>
+          </div>
+
+          {topCandidates.length === 0 ? (
+            <p className="text-gray-500">
+              No scored candidates yet. Save scorecards to see top candidates here.
+            </p>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {topCandidates.map((candidate, index) => (
+                <div
+                  key={candidate.id}
+                  onClick={() =>
+                    router.push(`/jobs/${candidate.job_id}/candidates/${candidate.id}`)
+                  }
+                  className="border border-gray-200 rounded-xl p-5 cursor-pointer hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Rank #{index + 1}</p>
+                      <h3 className="text-xl font-bold mt-1">{candidate.full_name}</h3>
+                      <p className="text-gray-600 mt-1">{candidate.email}</p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Job: {jobTitleMap[candidate.job_id] || "Unknown Job"}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Stage: {candidate.stage || "Applied"}
+                      </p>
+                      {candidate.score_recommendation ? (
+                        <p className="text-sm text-indigo-600 mt-2">
+                          {candidate.score_recommendation}
+                        </p>
+                      ) : null}
+                      {candidate.interview_date ? (
+                        <p className="text-sm text-blue-600 mt-2">
+                          Interview: {formatInterviewDate(candidate.interview_date)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="shrink-0 rounded-full bg-black text-white px-4 py-3 text-lg font-bold">
+                      {candidate.score_overall}/10
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </main>
