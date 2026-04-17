@@ -33,6 +33,8 @@ type Candidate = {
   notes: string | null;
   interview_date: string | null;
   created_at: string;
+  score_overall: number | null;
+  score_recommendation: string | null;
 };
 
 const STAGE_OPTIONS = [
@@ -44,18 +46,35 @@ const STAGE_OPTIONS = [
   "Rejected",
 ];
 
+const RECOMMENDATION_OPTIONS = [
+  "All Recommendations",
+  "Move Forward",
+  "Hold",
+  "Reject",
+];
+
+const SORT_OPTIONS = [
+  "Newest",
+  "Oldest",
+  "Highest Score",
+  "Lowest Score",
+  "Interview Date",
+];
+
 export default function JobDetailPage() {
   const router = useRouter();
   const params = useParams();
   const jobId = params.jobId as string;
 
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState("");
   const [teamId, setTeamId] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All Stages");
+  const [recommendationFilter, setRecommendationFilter] = useState("All Recommendations");
+  const [sortBy, setSortBy] = useState("Newest");
 
   const loadPage = async () => {
     const {
@@ -66,8 +85,6 @@ export default function JobDetailPage() {
       router.replace("/login");
       return;
     }
-
-    setUserId(session.user.id);
 
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
@@ -116,10 +133,9 @@ export default function JobDetailPage() {
     const { data: candidatesData, error: candidatesError } = await supabase
       .from("candidates")
       .select(
-        "id, job_id, full_name, email, phone, linkedin_url, resume_url, stage, notes, interview_date, created_at"
+        "id, job_id, full_name, email, phone, linkedin_url, resume_url, stage, notes, interview_date, created_at, score_overall, score_recommendation"
       )
-      .eq("job_id", jobId)
-      .order("created_at", { ascending: false });
+      .eq("job_id", jobId);
 
     if (candidatesError) {
       alert(candidatesError.message);
@@ -137,18 +153,59 @@ export default function JobDetailPage() {
   }, [jobId]);
 
   const filteredCandidates = useMemo(() => {
-    return candidates.filter((candidate) => {
-      const matchesSearch =
-        candidate.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        candidate.email.toLowerCase().includes(search.toLowerCase());
+    let result = [...candidates];
 
-      const currentStage = candidate.stage || "Applied";
-      const matchesStage =
-        stageFilter === "All Stages" || currentStage === stageFilter;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((candidate) => {
+        return (
+          candidate.full_name.toLowerCase().includes(q) ||
+          candidate.email.toLowerCase().includes(q)
+        );
+      });
+    }
 
-      return matchesSearch && matchesStage;
+    if (stageFilter !== "All Stages") {
+      result = result.filter((candidate) => {
+        const currentStage = candidate.stage || "Applied";
+        return currentStage === stageFilter;
+      });
+    }
+
+    if (recommendationFilter !== "All Recommendations") {
+      result = result.filter((candidate) => {
+        return (candidate.score_recommendation || "") === recommendationFilter;
+      });
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === "Newest") {
+        return b.created_at.localeCompare(a.created_at);
+      }
+
+      if (sortBy === "Oldest") {
+        return a.created_at.localeCompare(b.created_at);
+      }
+
+      if (sortBy === "Highest Score") {
+        return (b.score_overall || 0) - (a.score_overall || 0);
+      }
+
+      if (sortBy === "Lowest Score") {
+        return (a.score_overall || 0) - (b.score_overall || 0);
+      }
+
+      if (sortBy === "Interview Date") {
+        const aDate = a.interview_date || "9999-12-31T23:59";
+        const bDate = b.interview_date || "9999-12-31T23:59";
+        return aDate.localeCompare(bDate);
+      }
+
+      return 0;
     });
-  }, [candidates, search, stageFilter]);
+
+    return result;
+  }, [candidates, search, stageFilter, recommendationFilter, sortBy]);
 
   const groupedCandidates = useMemo(() => {
     const groups: Record<string, Candidate[]> = {};
@@ -224,9 +281,7 @@ export default function JobDetailPage() {
                 Status: {job.status || "open"}
               </p>
               {teamId ? (
-                <p className="text-sm text-indigo-600 mt-2">
-                  Shared Team Job
-                </p>
+                <p className="text-sm text-indigo-600 mt-2">Shared Team Job</p>
               ) : null}
             </div>
 
@@ -256,41 +311,66 @@ export default function JobDetailPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow p-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-3xl font-bold">Candidates</h2>
-              <p className="text-gray-600 mt-2">
-                Search, filter, and manage candidates for this job.
-              </p>
-            </div>
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold">Candidates</h2>
+            <p className="text-gray-600 mt-2">
+              Search, filter, and sort candidates for this job.
+            </p>
+          </div>
 
-            <div className="flex flex-col md:flex-row gap-3">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search candidates..."
-                className="rounded-lg border border-gray-300 px-4 py-2"
-              />
+          <div className="grid md:grid-cols-4 gap-3 mb-8">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search candidates..."
+              className="rounded-lg border border-gray-300 px-4 py-3"
+            />
 
-              <select
-                value={stageFilter}
-                onChange={(e) => setStageFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-4 py-2"
-              >
-                <option>All Stages</option>
-                {STAGE_OPTIONS.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="rounded-lg border border-gray-300 px-4 py-3"
+            >
+              <option>All Stages</option>
+              {STAGE_OPTIONS.map((stage) => (
+                <option key={stage} value={stage}>
+                  {stage}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={recommendationFilter}
+              onChange={(e) => setRecommendationFilter(e.target.value)}
+              className="rounded-lg border border-gray-300 px-4 py-3"
+            >
+              {RECOMMENDATION_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-lg border border-gray-300 px-4 py-3"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             {STAGE_OPTIONS.map((stage) => (
-              <div key={stage} className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+              <div
+                key={stage}
+                className="bg-gray-50 rounded-xl p-5 border border-gray-200"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold">{stage}</h3>
                   <span className="text-sm bg-white border border-gray-300 rounded-full px-3 py-1">
@@ -314,11 +394,25 @@ export default function JobDetailPage() {
                         <p className="text-sm text-gray-600 mt-1">
                           {candidate.email}
                         </p>
+
+                        {candidate.score_overall ? (
+                          <p className="text-sm text-indigo-600 mt-2">
+                            Score: {candidate.score_overall}/10
+                          </p>
+                        ) : null}
+
+                        {candidate.score_recommendation ? (
+                          <p className="text-sm text-gray-700 mt-1">
+                            {candidate.score_recommendation}
+                          </p>
+                        ) : null}
+
                         {candidate.resume_url ? (
                           <p className="text-sm text-green-600 mt-2">
                             Resume uploaded
                           </p>
                         ) : null}
+
                         {candidate.interview_date ? (
                           <p className="text-sm text-blue-600 mt-2">
                             {formatInterviewDate(candidate.interview_date)}
