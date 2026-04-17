@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -61,6 +71,108 @@ const SORT_OPTIONS = [
   "Interview Date",
 ];
 
+function CandidateCard({
+  candidate,
+  onOpen,
+  formatInterviewDate,
+}: {
+  candidate: Candidate;
+  onOpen: () => void;
+  formatInterviewDate: (dateString: string) => string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: candidate.id,
+      data: {
+        candidateId: candidate.id,
+        currentStage: candidate.stage || "Applied",
+      },
+    });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+    >
+      <div
+        className="cursor-grab active:cursor-grabbing"
+        {...listeners}
+        {...attributes}
+      >
+        <p className="font-semibold">{candidate.full_name}</p>
+        <p className="text-sm text-gray-600 mt-1">{candidate.email}</p>
+
+        {candidate.score_overall ? (
+          <p className="text-sm text-indigo-600 mt-2">
+            Score: {candidate.score_overall}/10
+          </p>
+        ) : null}
+
+        {candidate.score_recommendation ? (
+          <p className="text-sm text-gray-700 mt-1">
+            {candidate.score_recommendation}
+          </p>
+        ) : null}
+
+        {candidate.resume_url ? (
+          <p className="text-sm text-green-600 mt-2">Resume uploaded</p>
+        ) : null}
+
+        {candidate.interview_date ? (
+          <p className="text-sm text-blue-600 mt-2">
+            {formatInterviewDate(candidate.interview_date)}
+          </p>
+        ) : null}
+      </div>
+
+      <button
+        onClick={onOpen}
+        className="mt-3 text-sm text-blue-600 hover:underline"
+      >
+        Open Candidate
+      </button>
+    </div>
+  );
+}
+
+function StageColumn({
+  stage,
+  count,
+  children,
+}: {
+  stage: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bg-gray-50 rounded-xl p-5 border min-h-[260px] ${
+        isOver ? "border-indigo-500 bg-indigo-50" : "border-gray-200"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold">{stage}</h3>
+        <span className="text-sm bg-white border border-gray-300 rounded-full px-3 py-1">
+          {count}
+        </span>
+      </div>
+
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
 export default function JobDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -68,13 +180,18 @@ export default function JobDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [teamId, setTeamId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [job, setJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All Stages");
-  const [recommendationFilter, setRecommendationFilter] = useState("All Recommendations");
+  const [recommendationFilter, setRecommendationFilter] = useState(
+    "All Recommendations"
+  );
   const [sortBy, setSortBy] = useState("Newest");
+  const [movingCandidateId, setMovingCandidateId] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor));
 
   const loadPage = async () => {
     const {
@@ -85,6 +202,8 @@ export default function JobDetailPage() {
       router.replace("/login");
       return;
     }
+
+    setCurrentUserId(session.user.id);
 
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
@@ -215,11 +334,11 @@ export default function JobDetailPage() {
     });
 
     filteredCandidates.forEach((candidate) => {
-      const stage = candidate.stage || "Applied";
-      if (!groups[stage]) {
-        groups[stage] = [];
+      const currentStage = candidate.stage || "Applied";
+      if (!groups[currentStage]) {
+        groups[currentStage] = [];
       }
-      groups[stage].push(candidate);
+      groups[currentStage].push(candidate);
     });
 
     return groups;
@@ -243,6 +362,61 @@ export default function JobDetailPage() {
     if (hour === 0) hour = 12;
 
     return `${month}/${day}/${year} at ${hour}:${minute} ${suffix}`;
+  };
+
+  const logStageMove = async (
+    candidate: Candidate,
+    previousStage: string,
+    nextStage: string
+  ) => {
+    const description = `${candidate.full_name} moved from ${previousStage} to ${nextStage}`;
+
+    await supabase.from("activity_logs").insert({
+      team_id: teamId,
+      user_id: currentUserId || null,
+      job_id: jobId,
+      candidate_id: candidate.id,
+      action_type: "candidate_stage_dragged",
+      description,
+    });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const candidateId = String(event.active.id);
+    const destinationStage = event.over?.id ? String(event.over.id) : null;
+
+    if (!destinationStage) return;
+    if (!STAGE_OPTIONS.includes(destinationStage)) return;
+
+    const candidate = candidates.find((item) => item.id === candidateId);
+    if (!candidate) return;
+
+    const previousStage = candidate.stage || "Applied";
+    if (previousStage === destinationStage) return;
+
+    setMovingCandidateId(candidateId);
+
+    const optimisticCandidates = candidates.map((item) =>
+      item.id === candidateId ? { ...item, stage: destinationStage } : item
+    );
+    setCandidates(optimisticCandidates);
+
+    const { error } = await supabase
+      .from("candidates")
+      .update({
+        stage: destinationStage,
+      })
+      .eq("id", candidateId);
+
+    if (error) {
+      alert(error.message);
+      setCandidates(candidates);
+      setMovingCandidateId(null);
+      return;
+    }
+
+    await logStageMove(candidate, previousStage, destinationStage);
+    setMovingCandidateId(null);
   };
 
   if (loading) {
@@ -314,8 +488,13 @@ export default function JobDetailPage() {
           <div className="mb-6">
             <h2 className="text-3xl font-bold">Candidates</h2>
             <p className="text-gray-600 mt-2">
-              Search, filter, and sort candidates for this job.
+              Search, filter, sort, and drag candidates between stages.
             </p>
+            {movingCandidateId ? (
+              <p className="text-sm text-indigo-600 mt-2">
+                Saving stage change...
+              </p>
+            ) : null}
           </div>
 
           <div className="grid md:grid-cols-4 gap-3 mb-8">
@@ -365,66 +544,32 @@ export default function JobDetailPage() {
             </select>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {STAGE_OPTIONS.map((stage) => (
-              <div
-                key={stage}
-                className="bg-gray-50 rounded-xl p-5 border border-gray-200"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold">{stage}</h3>
-                  <span className="text-sm bg-white border border-gray-300 rounded-full px-3 py-1">
-                    {groupedCandidates[stage]?.length || 0}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <div className="grid md:grid-cols-3 gap-6">
+              {STAGE_OPTIONS.map((stage) => (
+                <StageColumn
+                  key={stage}
+                  stage={stage}
+                  count={groupedCandidates[stage]?.length || 0}
+                >
                   {(groupedCandidates[stage] || []).length === 0 ? (
                     <p className="text-sm text-gray-500">No candidates</p>
                   ) : (
                     groupedCandidates[stage].map((candidate) => (
-                      <div
+                      <CandidateCard
                         key={candidate.id}
-                        onClick={() =>
+                        candidate={candidate}
+                        formatInterviewDate={formatInterviewDate}
+                        onOpen={() =>
                           router.push(`/jobs/${job.id}/candidates/${candidate.id}`)
                         }
-                        className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50"
-                      >
-                        <p className="font-semibold">{candidate.full_name}</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {candidate.email}
-                        </p>
-
-                        {candidate.score_overall ? (
-                          <p className="text-sm text-indigo-600 mt-2">
-                            Score: {candidate.score_overall}/10
-                          </p>
-                        ) : null}
-
-                        {candidate.score_recommendation ? (
-                          <p className="text-sm text-gray-700 mt-1">
-                            {candidate.score_recommendation}
-                          </p>
-                        ) : null}
-
-                        {candidate.resume_url ? (
-                          <p className="text-sm text-green-600 mt-2">
-                            Resume uploaded
-                          </p>
-                        ) : null}
-
-                        {candidate.interview_date ? (
-                          <p className="text-sm text-blue-600 mt-2">
-                            {formatInterviewDate(candidate.interview_date)}
-                          </p>
-                        ) : null}
-                      </div>
+                      />
                     ))
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
+                </StageColumn>
+              ))}
+            </div>
+          </DndContext>
         </div>
       </div>
     </main>
