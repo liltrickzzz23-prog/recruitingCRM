@@ -246,7 +246,14 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "Unable to start checkout.");
+        console.error("Stripe checkout error response:", data);
+        alert(JSON.stringify(data, null, 2));
+        setStartingCheckout(false);
+        return;
+      }
+
+      if (!data.url) {
+        alert("Stripe checkout did not return a URL.");
         setStartingCheckout(false);
         return;
       }
@@ -254,7 +261,11 @@ export default function DashboardPage() {
       window.location.href = data.url;
     } catch (error) {
       console.error(error);
-      alert("Unable to start checkout.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to create checkout session."
+      );
       setStartingCheckout(false);
     }
   };
@@ -337,7 +348,7 @@ export default function DashboardPage() {
       .sort((a, b) => {
         const dateA = a.interview_date || "";
         const dateB = b.interview_date || "";
-        return dateA.localeCompare(dateB);
+        return dateA.localeCompare(bDate);
       });
   }, [candidates]);
 
