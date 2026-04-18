@@ -348,13 +348,14 @@ export default function DashboardPage() {
       .sort((a, b) => {
         const dateA = a.interview_date || "";
         const dateB = b.interview_date || "";
-        return dateA.localeCompare(bDate);
+        return dateA.localeCompare(dateB);
       });
   }, [candidates]);
 
   const topCandidates = useMemo(() => {
     const scoredCandidates = candidates.filter(
-      (candidate) => candidate.score_overall !== null && candidate.score_overall !== undefined
+      (candidate) =>
+        candidate.score_overall !== null && candidate.score_overall !== undefined
     );
 
     return [...scoredCandidates]
