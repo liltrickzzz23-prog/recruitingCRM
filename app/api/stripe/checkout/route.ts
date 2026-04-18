@@ -60,6 +60,17 @@ export async function POST(req: Request) {
           error instanceof Error
             ? error.message
             : "Unable to create checkout session.",
+        debug: {
+          hasSecretKey: Boolean(stripeSecretKey),
+          secretKeyMode: stripeSecretKey?.startsWith("sk_live_")
+            ? "live"
+            : stripeSecretKey?.startsWith("sk_test_")
+            ? "test"
+            : "unknown",
+          hasPriceId: Boolean(priceId),
+          priceIdPrefix: priceId?.slice(0, 12) || null,
+          appUrl,
+        },
       },
       { status: 500 }
     );
